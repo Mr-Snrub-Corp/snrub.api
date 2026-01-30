@@ -1,0 +1,75 @@
+name: Python Tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen
+
+      - name: Run database migrations
+        run: |
+          uv run alembic upgrade head
+        env:
+          APP_ENV: test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: test_db
+          JWT_SECRET: test-jwt-secret-for-ci
+          JWT_ALGORITHM: HS256
+          JWT_EXPIRES_MINUTES: 60
+          GOOGLE_CLIENT_ID: placeholder-client-id
+          GOOGLE_CLIENT_SECRET: placeholder-client-secret
+          GOOGLE_AUTH_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+
+      - name: Run tests
+        run: |
+          uv run pytest -v
+        env:
+          APP_ENV: test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: test_db
+          JWT_SECRET: test-jwt-secret-for-ci
+          JWT_ALGORITHM: HS256
+          JWT_EXPIRES_MINUTES: 60
+          GOOGLE_CLIENT_ID: placeholder-client-id
+          GOOGLE_CLIENT_SECRET: placeholder-client-secret
+          GOOGLE_AUTH_REDIRECT_URI: http://localhost:8000/api/auth/google/callback

@@ -1,0 +1,54 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: mot-fastapi:dev
+    container_name: fastapi-application
+    env_file: .env.development
+    environment:
+      APP_ENV: development
+    volumes:
+      - ./app:/fastapi/app
+      - ./tests:/fastapi/tests
+      - ./.env.development:/fastapi/.env.development
+      - ./pyproject.toml:/fastapi/pyproject.toml
+      - ./uv.lock:/fastapi/uv.lock
+      - ./migrations:/fastapi/migrations
+    ports:
+      - '8000:8000'
+    restart: "no"
+    depends_on:
+      - db
+
+  client:
+    build: 
+      context: ../mot.frontend
+      dockerfile: Dockerfile
+    image: mot-frontend:dev  # Add 
+    container_name: vue-application
+    volumes:
+      - ../mot.frontend:/vue  # Mount source code for hot reloading
+      - /vue/node_modules  # Prevent overwriting node_modules with host directory
+    ports:
+      - '5173:5173'
+    restart: "no"
+      
+
+  db:
+    image: postgres:15-alpine
+    env_file: .env.development
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+
+volumes:
+  postgres_data:
