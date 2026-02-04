@@ -8,6 +8,7 @@ from app.controllers.user import pwd_context
 from app.core.config import settings
 from app.models.user import User, UserRole
 from app.security.jwt import sign_jwt
+from tests.conftest import generate_png_bytes
 
 
 @pytest.fixture(scope="session")
@@ -127,20 +128,7 @@ def admin_auth_headers(admin_auth_token):
 @pytest.fixture
 def sample_png_bytes():
     """Generate a minimal valid PNG image (1x1 transparent pixel)"""
-    # Minimal valid PNG: 1x1 transparent pixel
-    return (
-        b"\x89PNG\r\n\x1a\n"  # PNG signature
-        b"\x00\x00\x00\rIHDR"  # IHDR chunk
-        b"\x00\x00\x00\x01"  # width: 1
-        b"\x00\x00\x00\x01"  # height: 1
-        b"\x08\x06"  # bit depth: 8, color type: 6 (RGBA)
-        b"\x00\x00\x00"  # compression, filter, interlace
-        b"\x1f\x15\xc4\x89"  # CRC
-        b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"  # IDAT chunk
-        b"\r\n-\xb4"  # CRC
-        b"\x00\x00\x00\x00IEND"  # IEND chunk
-        b"\xaeB`\x82"  # CRC
-    )
+    return generate_png_bytes(1, 1)
 
 
 @pytest.fixture

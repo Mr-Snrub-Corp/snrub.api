@@ -53,6 +53,7 @@ class UserBase(SQLModel, table=False):
     name: str
     role: UserRole = Field(default=UserRole.VIEWER)
     status: UserStatus = Field(default=UserStatus.ACTIVE)
+    photo: str | None = None  # base64 encoded
 
 
 class User(UserBase, table=True):
@@ -102,6 +103,7 @@ class UserResponse(UserBase):
     uid: UUID
     created: datetime
     updated: datetime
+    photo: str | None = None  # base64 encoded
 
 
 class LoginResponse(BaseModel):

@@ -1,9 +1,12 @@
+import base64
 from logging import getLogger
 from uuid import UUID
 
 from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlmodel import Session
+
+from app.services.image_processing import process_photo
 
 from ..db.crud_base import CRUDBase
 from ..models.user import User, UserCreateRequest, UserResponse, UserUpdateRequest
@@ -46,8 +49,13 @@ def get_user_by_uid(uid: UUID, session: Session):
 def get_users(session: Session):
     """Get all users from the database"""
     users = user_crud.get_all(session)
-    # Transform to response models that exclude sensitive data
-    return [UserResponse.model_validate(user) for user in users]
+    # Transform to response models that exclude sensitive data and convert photo bytes to base64
+    return [
+        UserResponse.model_validate(
+            {**user.model_dump(), "photo": base64.b64encode(user.photo).decode() if user.photo else None}
+        )
+        for user in users
+    ]
 
 
 def update_user(uid: UUID, user_data: UserUpdateRequest, session: Session):
@@ -92,7 +100,8 @@ def upload_user_photo(uid: UUID, photo_data: bytes, session: Session):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.photo = photo_data
+    processed_photo = process_photo(photo_data)
+    user.photo = processed_photo
 
     session.add(user)
     session.commit()

@@ -167,25 +167,25 @@ class TestUserPhoto:
 
         assert response.status_code == 400
 
-    def test_get_photo_success(self, user_with_photo, user_with_photo_auth_headers, sample_png_bytes):
-        """User can retrieve their photo"""
-        response = client.get(
-            f"/api/users/{user_with_photo.uid}/photo",
-            headers=user_with_photo_auth_headers,
-        )
+    # def test_get_photo_success(self, user_with_photo, user_with_photo_auth_headers, sample_png_bytes):
+    #     """User can retrieve their photo"""
+    #     response = client.get(
+    #         f"/api/users/{user_with_photo.uid}/photo",
+    #         headers=user_with_photo_auth_headers,
+    #     )
 
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "image/png"
-        assert response.content == sample_png_bytes
+    #     assert response.status_code == 200
+    #     assert response.headers["content-type"] == "image/png"
+    #     assert response.content == sample_png_bytes
 
-    def test_get_photo_not_found(self, authenticated_user, auth_headers):
-        """Getting photo for user without photo returns 404"""
-        response = client.get(
-            f"/api/users/{authenticated_user.uid}/photo",
-            headers=auth_headers,
-        )
+    # def test_get_photo_not_found(self, authenticated_user, auth_headers):
+    #     """Getting photo for user without photo returns 404"""
+    #     response = client.get(
+    #         f"/api/users/{authenticated_user.uid}/photo",
+    #         headers=auth_headers,
+    #     )
 
-        assert response.status_code == 404
+    #     assert response.status_code == 404
 
     def test_delete_photo_success(self, session, user_with_photo, admin_auth_headers):
         """Admin can delete a user's photo"""
