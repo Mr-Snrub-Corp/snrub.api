@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -107,6 +108,13 @@ class UserResponse(UserBase):
     created: datetime
     updated: datetime
     photo: str | None = None  # base64 encoded
+
+    @field_validator("photo", mode="before")
+    @classmethod
+    def convert_photo_bytes(cls, v: bytes | str | None) -> str | None:
+        if isinstance(v, bytes):
+            return base64.b64encode(v).decode()
+        return v
 
 
 class LoginResponse(BaseModel):
