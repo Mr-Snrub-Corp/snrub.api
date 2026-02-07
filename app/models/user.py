@@ -68,7 +68,10 @@ class User(UserBase, table=True):
     updated: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationship to PasswordReset model
-    password_resets: list["PasswordReset"] = Relationship(back_populates="user")
+    password_resets: list["PasswordReset"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
 
 class UserCreateRequest(UserBase):
