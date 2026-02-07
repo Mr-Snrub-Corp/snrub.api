@@ -6,6 +6,8 @@ from sqlmodel import Session, create_engine
 
 from app.controllers.user import pwd_context
 from app.core.config import settings
+from app.db.database import get_session
+from app.main import app
 from app.models.user import User, UserRole
 from app.security.jwt import sign_jwt
 from tests.conftest import generate_png_bytes
@@ -18,9 +20,21 @@ def engine():
 
 @pytest.fixture
 def session(engine):
-    with Session(engine) as session:
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+
+    def override_get_session():
         yield session
-        session.rollback()
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
