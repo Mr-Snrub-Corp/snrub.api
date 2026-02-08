@@ -16,6 +16,8 @@ services:
       - ./pyproject.toml:/fastapi/pyproject.toml
       - ./uv.lock:/fastapi/uv.lock
       - ./migrations:/fastapi/migrations
+      - ./seeds:/fastapi/seeds
+      - ./scripts:/fastapi/scripts
     ports:
       - "8000:8000"
     restart: "no"

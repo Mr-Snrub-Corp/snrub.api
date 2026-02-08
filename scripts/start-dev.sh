@@ -9,6 +9,10 @@ sleep 5
 echo "Running database migrations..."
 python -m alembic upgrade head
 
+# Seed database (idempotent, development only)
+echo "Running database seed..."
+python -m seeds.seed_runner
+
 # Start the application with hot reload
 echo "Starting application..."
 exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /fastapi --root-path ""
