@@ -8,6 +8,7 @@ from app.controllers.user import pwd_context
 from app.core.config import settings
 from app.db.database import get_session
 from app.main import app
+from app.models.incident_category import IncidentCategory
 from app.models.user import User, UserRole
 from app.security.jwt import sign_jwt
 from tests.conftest import generate_png_bytes
@@ -137,6 +138,15 @@ def admin_auth_token(admin_user):
 def admin_auth_headers(admin_auth_token):
     """Generate authorization headers for admin user"""
     return {"Authorization": f"Bearer {admin_auth_token}"}
+
+
+@pytest.fixture
+def sample_category(session):
+    cat = IncidentCategory(code=f"test_cat_{uuid4().hex[:8]}", name="Test Category")
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    return cat
 
 
 @pytest.fixture

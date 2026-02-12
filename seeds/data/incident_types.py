@@ -1,0 +1,273 @@
+INCIDENT_TYPES = [
+    # reactor_physics
+    {
+        "code": "reactivity_excursion_risk",
+        "name": "Reactivity Excursion Risk",
+        "category_code": "reactor_physics",
+        "default_severity": 6,
+    },
+    {
+        "code": "control_rod_anomaly",
+        "name": "Control Rod Anomaly",
+        "category_code": "reactor_physics",
+        "default_severity": 6,
+    },
+    {
+        "code": "power_instability",
+        "name": "Power Instability",
+        "category_code": "reactor_physics",
+        "default_severity": 5,
+    },
+    {
+        "code": "unauthorised_power_change",
+        "name": "Unauthorised Power Change",
+        "category_code": "reactor_physics",
+        "default_severity": 5,
+    },
+    {
+        "code": "positive_void_coefficient_condition",
+        "name": "Positive Void Coefficient Condition",
+        "category_code": "reactor_physics",
+        "default_severity": 7,
+    },
+    {
+        "code": "xenon_poisoning_instability",
+        "name": "Xenon Poisoning Instability",
+        "category_code": "reactor_physics",
+        "default_severity": 5,
+    },
+    {
+        "code": "unrequested_fission_surplus",
+        "name": "Unrequested Fission Surplus",
+        "category_code": "reactor_physics",
+        "default_severity": 6,
+    },
+    # cooling_system
+    {
+        "code": "primary_coolant_loss",
+        "name": "Primary Coolant Loss",
+        "category_code": "cooling_system",
+        "default_severity": 7,
+    },
+    {
+        "code": "coolant_flow_reduction",
+        "name": "Coolant Flow Reduction",
+        "category_code": "cooling_system",
+        "default_severity": 5,
+    },
+    {
+        "code": "emergency_core_cooling_unavailable",
+        "name": "Emergency Core Cooling Unavailable",
+        "category_code": "cooling_system",
+        "default_severity": 7,
+    },
+    {
+        "code": "coolant_pump_failure",
+        "name": "Coolant Pump Failure",
+        "category_code": "cooling_system",
+        "default_severity": 6,
+    },
+    {
+        "code": "steam_pressure_anomaly",
+        "name": "Steam Pressure Anomaly",
+        "category_code": "cooling_system",
+        "default_severity": 5,
+    },
+    {
+        "code": "heat_exchanger_failure",
+        "name": "Heat Exchanger Failure",
+        "category_code": "cooling_system",
+        "default_severity": 5,
+    },
+    {
+        "code": "coolant_temperature_exceedance",
+        "name": "Coolant Temperature Exceedance",
+        "category_code": "cooling_system",
+        "default_severity": 6,
+    },
+    # containment_radiation
+    {
+        "code": "radiation_release_detected",
+        "name": "Radiation Release Detected",
+        "category_code": "containment_radiation",
+        "default_severity": 7,
+    },
+    {
+        "code": "containment_integrity_compromised",
+        "name": "Containment Integrity Compromised",
+        "category_code": "containment_radiation",
+        "default_severity": 7,
+    },
+    {
+        "code": "radiation_level_exceedance",
+        "name": "Radiation Level Exceedance",
+        "category_code": "containment_radiation",
+        "default_severity": 6,
+    },
+    {
+        "code": "shielding_failure",
+        "name": "Shielding Failure",
+        "category_code": "containment_radiation",
+        "default_severity": 6,
+    },
+    {
+        "code": "radioactive_material_mishandling",
+        "name": "Radioactive Material Mishandling",
+        "category_code": "containment_radiation",
+        "default_severity": 5,
+    },
+    {
+        "code": "venting_system_malfunction",
+        "name": "Venting System Malfunction",
+        "category_code": "containment_radiation",
+        "default_severity": 5,
+    },
+    # safety_instrumentation
+    {
+        "code": "safety_interlock_disabled",
+        "name": "Safety Interlock Disabled",
+        "category_code": "safety_instrumentation",
+        "default_severity": 6,
+    },
+    {
+        "code": "alarm_system_failure",
+        "name": "Alarm System Failure",
+        "category_code": "safety_instrumentation",
+        "default_severity": 5,
+    },
+    {
+        "code": "sensor_miscalibration",
+        "name": "Sensor Miscalibration",
+        "category_code": "safety_instrumentation",
+        "default_severity": 4,
+    },
+    {
+        "code": "instrumentation_unreliable",
+        "name": "Instrumentation Unreliable",
+        "category_code": "safety_instrumentation",
+        "default_severity": 5,
+    },
+    {
+        "code": "emergency_shutdown_unavailable",
+        "name": "Emergency Shutdown Unavailable",
+        "category_code": "safety_instrumentation",
+        "default_severity": 7,
+    },
+    {
+        "code": "backup_power_failure",
+        "name": "Backup Power Failure",
+        "category_code": "safety_instrumentation",
+        "default_severity": 6,
+    },
+    # procedure_deviation
+    {
+        "code": "test_procedure_violation",
+        "name": "Test Procedure Violation",
+        "category_code": "procedure_deviation",
+        "default_severity": 4,
+    },
+    {
+        "code": "safety_test_failure",
+        "name": "Safety Test Failure",
+        "category_code": "procedure_deviation",
+        "default_severity": 5,
+    },
+    {
+        "code": "test_not_completed",
+        "name": "Test Not Completed",
+        "category_code": "procedure_deviation",
+        "default_severity": 3,
+    },
+    {
+        "code": "operating_limit_exceeded",
+        "name": "Operating Limit Exceeded",
+        "category_code": "procedure_deviation",
+        "default_severity": 5,
+    },
+    {
+        "code": "unauthorised_override",
+        "name": "Unauthorised Override",
+        "category_code": "procedure_deviation",
+        "default_severity": 6,
+    },
+    {
+        "code": "documentation_noncompliance",
+        "name": "Documentation Noncompliance",
+        "category_code": "procedure_deviation",
+        "default_severity": 2,
+    },
+    # personnel_safety
+    {
+        "code": "worker_radiation_exposure",
+        "name": "Worker Radiation Exposure",
+        "category_code": "personnel_safety",
+        "default_severity": 6,
+    },
+    {
+        "code": "industrial_accident",
+        "name": "Industrial Accident",
+        "category_code": "personnel_safety",
+        "default_severity": 5,
+    },
+    {
+        "code": "protective_equipment_failure",
+        "name": "Protective Equipment Failure",
+        "category_code": "personnel_safety",
+        "default_severity": 4,
+    },
+    {
+        "code": "contamination_event",
+        "name": "Contamination Event",
+        "category_code": "personnel_safety",
+        "default_severity": 6,
+    },
+    {
+        "code": "evacuation_required",
+        "name": "Evacuation Required",
+        "category_code": "personnel_safety",
+        "default_severity": 7,
+    },
+    {
+        "code": "operator_asleep_at_station",
+        "name": "Operator Asleep at Station",
+        "category_code": "personnel_safety",
+        "default_severity": 4,
+    },
+    {
+        "code": "operator_intoxicated_at_station",
+        "name": "Operator Intoxicated at Station",
+        "category_code": "personnel_safety",
+        "default_severity": 5,
+    },
+    # infrastructure
+    {
+        "code": "power_supply_instability",
+        "name": "Power Supply Instability",
+        "category_code": "infrastructure",
+        "default_severity": 5,
+    },
+    {
+        "code": "cooling_tower_failure",
+        "name": "Cooling Tower Failure",
+        "category_code": "infrastructure",
+        "default_severity": 5,
+    },
+    {
+        "code": "fire_detection_event",
+        "name": "Fire Detection Event",
+        "category_code": "infrastructure",
+        "default_severity": 4,
+    },
+    {
+        "code": "structural_integrity_concern",
+        "name": "Structural Integrity Concern",
+        "category_code": "infrastructure",
+        "default_severity": 5,
+    },
+    {
+        "code": "environmental_control_failure",
+        "name": "Environmental Control Failure",
+        "category_code": "infrastructure",
+        "default_severity": 4,
+    },
+]

@@ -11,9 +11,11 @@ from sqlmodel import Session, select
 
 from app.db.database import engine
 from app.models.incident_category import IncidentCategory
+from app.models.incident_type import IncidentType
 from app.models.password_reset import PasswordReset  # noqa: F401 — needed for SQLAlchemy relationship resolution
 from app.models.user import User
 from seeds.data.incident_categories import INCIDENT_CATEGORIES
+from seeds.data.incident_types import INCIDENT_TYPES
 from seeds.data.users import get_users
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -68,6 +70,32 @@ def seed_incident_categories(session: Session) -> None:
     logger.info(f"Incident categories: {created} created, {updated} updated")
 
 
+def seed_incident_types(session: Session) -> None:
+    # Build category code -> uid lookup
+    categories = session.exec(select(IncidentCategory)).all()
+    cat_lookup = {c.code: c.uid for c in categories}
+
+    created = 0
+    updated = 0
+
+    for data in INCIDENT_TYPES:
+        entry = {k: v for k, v in data.items() if k != "category_code"}
+        entry["category_id"] = cat_lookup[data["category_code"]]
+
+        existing = session.exec(select(IncidentType).where(IncidentType.code == entry["code"])).first()
+        if existing:
+            for key, value in entry.items():
+                setattr(existing, key, value)
+            session.add(existing)
+            updated += 1
+        else:
+            session.add(IncidentType(**entry))
+            created += 1
+
+    session.commit()
+    logger.info(f"Incident types: {created} created, {updated} updated")
+
+
 def run():
     _guard_environment()
     logger.info("Seeding database...")
@@ -75,6 +103,7 @@ def run():
     with Session(engine) as session:
         seed_users(session)
         seed_incident_categories(session)
+        seed_incident_types(session)
 
     logger.info("Seeding complete.")
 
