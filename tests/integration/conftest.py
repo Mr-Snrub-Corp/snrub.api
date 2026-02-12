@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.database import get_session
 from app.main import app
 from app.models.incident_category import IncidentCategory
+from app.models.incident_type import IncidentType
 from app.models.user import User, UserRole
 from app.security.jwt import sign_jwt
 from tests.conftest import generate_png_bytes
@@ -147,6 +148,54 @@ def sample_category(session):
     session.commit()
     session.refresh(cat)
     return cat
+
+
+@pytest.fixture
+def sample_type(session, sample_category):
+    t = IncidentType(
+        code=f"test_type_{uuid4().hex[:8]}",
+        name="Test Type",
+        category_id=sample_category.uid,
+        default_severity=3,
+    )
+    session.add(t)
+    session.commit()
+    session.refresh(t)
+    return t
+
+
+@pytest.fixture
+def creator_user(session):
+    person = Person()
+    hashed_password = pwd_context.hash("CreatorPass123!")
+    user = User(
+        uid=uuid4(),
+        email=person.email(),
+        name=person.full_name(),
+        role=UserRole.CREATOR,
+        password=hashed_password,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def creator_auth_token(creator_user):
+    user_data = {
+        "uid": str(creator_user.uid),
+        "email": creator_user.email,
+        "name": creator_user.name,
+        "role": creator_user.role,
+    }
+    token_response = sign_jwt(creator_user.uid, user_data)
+    return token_response.access_token
+
+
+@pytest.fixture
+def creator_auth_headers(creator_auth_token):
+    return {"Authorization": f"Bearer {creator_auth_token}"}
 
 
 @pytest.fixture
