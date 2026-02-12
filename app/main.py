@@ -11,6 +11,7 @@ from .routes.auth.google import router as google_auth_router
 from .routes.auth.local import router as local_auth_router
 from .routes.incident_category import router as incident_category_router
 from .routes.incident_report import router as incident_report_router
+from .routes.incident_report_subject import router as incident_report_subject_router
 from .routes.incident_type import router as incident_type_router
 from .routes.user import router as user_router
 
@@ -52,6 +53,7 @@ app.include_router(user_router, prefix="/api")
 app.include_router(incident_category_router, prefix="/api")
 app.include_router(incident_type_router, prefix="/api")
 app.include_router(incident_report_router, prefix="/api")
+app.include_router(incident_report_subject_router, prefix="/api")
 app.include_router(local_auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(google_auth_router, prefix="/api")

@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from .incident_report_subject import IncidentReportSubjectCreateRequest, IncidentReportSubjectResponse
+
 
 class IncidentStatus(StrEnum):
     REPORTED = "reported"
@@ -47,6 +49,7 @@ class IncidentReportCreateRequest(SQLModel):
     description: str | None = None
     severity: int
     occurred_at: datetime
+    subjects: list[IncidentReportSubjectCreateRequest] = []
 
     @field_validator("severity")
     @classmethod
@@ -62,6 +65,7 @@ class IncidentReportUpdateRequest(SQLModel):
     status: IncidentStatus | None = None
     escalation_level: EscalationLevel | None = None
     incident_type_id: UUID | None = None
+    subjects: list[IncidentReportSubjectCreateRequest] | None = None
 
     @field_validator("severity")
     @classmethod
@@ -75,3 +79,4 @@ class IncidentReportResponse(IncidentReportBase):
     uid: UUID
     created: datetime
     updated: datetime
+    subjects: list[IncidentReportSubjectResponse] = []

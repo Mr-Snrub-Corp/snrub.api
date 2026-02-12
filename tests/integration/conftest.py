@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.database import get_session
 from app.main import app
 from app.models.incident_category import IncidentCategory
+from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
 from app.models.incident_type import IncidentType
 from app.models.user import User, UserRole
 from app.security.jwt import sign_jwt
@@ -196,6 +197,24 @@ def creator_auth_token(creator_user):
 @pytest.fixture
 def creator_auth_headers(creator_auth_token):
     return {"Authorization": f"Bearer {creator_auth_token}"}
+
+
+@pytest.fixture
+def sample_report(session, sample_type, creator_user):
+    from datetime import datetime
+
+    report = IncidentReport(
+        incident_type_id=sample_type.uid,
+        severity=4,
+        status=IncidentStatus.REPORTED,
+        escalation_level=EscalationLevel.NONE,
+        reported_by_user_id=creator_user.uid,
+        occurred_at=datetime.utcnow(),
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
 
 
 @pytest.fixture
