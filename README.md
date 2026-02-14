@@ -108,11 +108,28 @@ Just run integration tests
 APP_ENV=test uv run pytest tests/integration
 ```
 
+### Updating Seed Data
 
-// TODO
+Export current dev DB state (new users + incident reports) to seed-friendly format:
+```zsh
+docker compose exec api python scripts/export_seed_data.py
+```
+- New users are printed as dicts to append to `seeds/data/users.py`, photos written to `seeds/data/photos/`
+- Incident reports are printed as the full `INCIDENT_REPORTS` list for `seeds/data/incident_reports.py`
 
-{
-    "detail": "(psycopg.errors.NotNullViolation) null value in column \"user_id\" of relation \"password_resets\" violates not-null constraint\nDETAIL:  Failing row contains (ac8585ed-2c1f-40dd-8a13-ddc3d77af02f, null, 2026-02-05 11:38:19.655726, t).\n[SQL: UPDATE password_resets SET user_id=%(user_id)s::UUID WHERE password_resets.token = %(password_resets_token)s::UUID]\n[parameters: {'user_id': None, 'password_resets_token': UUID('ac8585ed-2c1f-40dd-8a13-ddc3d77af02f')}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
-}
+Seeds run automatically on `docker compose up`. To re-seed manually:
+```zsh
+docker compose exec api python -m seeds.seed_runner
+```
+
+### Ruff Linting / formating
+```zsh
+uv run ruff check . --fix
+uv run ruff format .
+```
+
+
+
+
 
 Delete a test user fails cos of some password reset relationship

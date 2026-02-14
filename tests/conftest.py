@@ -16,4 +16,3 @@ def generate_png_bytes(width: int = 1, height: int = 1, mode: str = "P") -> byte
     buffer = BytesIO()
     img.save(buffer, format="PNG")
     return buffer.getvalue()
-

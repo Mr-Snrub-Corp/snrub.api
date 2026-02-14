@@ -8,6 +8,7 @@ from .user import User
 
 class PasswordReset(SQLModel, table=True):
     """Model for password reset tokens"""
+
     __tablename__ = "password_resets"
 
     token: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -21,7 +22,4 @@ class PasswordReset(SQLModel, table=True):
     @classmethod
     def create_token(cls, user_id: UUID, expires_in_hours: int = 24) -> "PasswordReset":
         """Create a new password reset token"""
-        return cls(
-            user_id=user_id,
-            expires_at=datetime.utcnow() + timedelta(hours=expires_in_hours)
-        )
+        return cls(user_id=user_id, expires_at=datetime.utcnow() + timedelta(hours=expires_in_hours))

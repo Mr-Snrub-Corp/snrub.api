@@ -16,13 +16,9 @@ class JWTBearer(HTTPBearer):
         credentials: HTTPAuthorizationCredentials = await super().__call__(request)
         if credentials:
             if not credentials.scheme == "Bearer":
-                raise HTTPException(
-                    status_code=401, detail="Invalid authentication scheme."
-                )
+                raise HTTPException(status_code=401, detail="Invalid authentication scheme.")
             if not self.verify_jwt(credentials.credentials):
-                raise HTTPException(
-                    status_code=401, detail="Invalid token or expired token."
-                )
+                raise HTTPException(status_code=401, detail="Invalid token or expired token.")
             return credentials.credentials
         else:
             raise HTTPException(status_code=401, detail="Invalid authorization code.")

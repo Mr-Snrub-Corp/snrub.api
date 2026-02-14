@@ -9,6 +9,7 @@ from app.security.auth_bearer import JWTBearer
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+
 # Routes will be added here
 @router.post("/login")
 async def login(login_data: LoginRequest, session: Session = Depends(get_session)):
@@ -16,24 +17,21 @@ async def login(login_data: LoginRequest, session: Session = Depends(get_session
 
     return authenticate_user(login_data, session)
 
+
 @router.post("/logout", dependencies=[Depends(JWTBearer())])
 async def logout():
     """Logout route"""
     return logout_user()
 
+
 @router.post("/request-password-reset")
-async def request_password_reset(
-    reset_data: RequestPasswordResetRequest,
-    session: Session = Depends(get_session)
-):
+async def request_password_reset(reset_data: RequestPasswordResetRequest, session: Session = Depends(get_session)):
     # Make sure to await the async function
     return await reset_password(reset_data, session)
 
+
 @router.post("/reset-password")
-def reset_password_with_token(
-    reset_data: PerformPasswordResetRequest,
-    session: Session = Depends(get_session)
-):
+def reset_password_with_token(reset_data: PerformPasswordResetRequest, session: Session = Depends(get_session)):
     # This function is not async, so no await needed
     return perform_password_reset(reset_data, session)
 

@@ -14,27 +14,16 @@ def authenticate_user(login_data: LoginRequest, session: Session):
     user = user_crud.get_by_email(session, login_data.email)
 
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
-        )
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     # Verify password
     if not pwd_context.verify(login_data.password, user.password):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
-        )
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-      # Basic user data to return
-    user_data = {
-        "uid": str(user.uid),
-        "email": user.email,
-        "name": user.name,
-        "role": user.role
-    }
+    # Basic user data to return
+    user_data = {"uid": str(user.uid), "email": user.email, "name": user.name, "role": user.role}
 
-        # Generate JWT token
+    # Generate JWT token
     return sign_jwt(user.uid, user_data)
 
 
@@ -45,7 +34,4 @@ def logout_user():
 
     # TODO implement a token blacklist here if needed
     # to invalidate tokens before they expire
-    return JSONResponse(
-        status_code=status.HTTP_205_RESET_CONTENT,
-        content={"message": "Successfully logged out"}
-    )
+    return JSONResponse(status_code=status.HTTP_205_RESET_CONTENT, content={"message": "Successfully logged out"})

@@ -77,6 +77,41 @@ USERS = [
         "status": UserStatus.SUSPENDED,
         "photo_file": "b_bernie.png",
     },
+    {
+        "email": "joe@snrub-corp.io",
+        "name": "Gummy Joe",
+        "role": UserRole.VIEWER,
+        "status": UserStatus.ACTIVE,
+        "photo_file": "joe.png",
+    },
+    {
+        "email": "carbon@snrub-corp.io",
+        "name": "Inanimate Carbon Rod",
+        "role": UserRole.CREATOR,
+        "status": UserStatus.ACTIVE,
+        "photo_file": "carbon.png",
+    },
+    {
+        "email": "mindy@snrub-corp.io",
+        "name": "Mindy Simmons",
+        "role": UserRole.CREATOR,
+        "status": UserStatus.ACTIVE,
+        "photo_file": "mindy.png",
+    },
+    {
+        "email": "smitty@snrub-corp.io",
+        "name": "Smitty Smit",
+        "role": UserRole.ADMIN,
+        "status": UserStatus.ACTIVE,
+        "photo_file": "smitty.png",
+    },
+    {
+        "email": "zutroy@snrub-corp.io",
+        "name": "Zutroy",
+        "role": UserRole.ADMIN,
+        "status": UserStatus.ACTIVE,
+        "photo_file": "zutroy.png",
+    },
 ]
 
 

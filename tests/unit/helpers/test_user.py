@@ -25,4 +25,6 @@ def test_validate_password_strength():
 
     # Test None case
     assert validate_password_strength(None) is None
+
+
 # docker compose exec api pytest tests/unit/models/test_user.py -v

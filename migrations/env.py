@@ -4,6 +4,10 @@ from app.db.database import engine
 from sqlmodel import SQLModel
 # Import all models that need to be included in migrations
 from app.models.user import User
+from app.models.incident_category import IncidentCategory  # noqa: F401
+from app.models.incident_report import IncidentReport  # noqa: F401
+from app.models.incident_report_subject import IncidentReportSubject  # noqa: F401
+from app.models.incident_type import IncidentType  # noqa: F401
 from app.models.password_reset import PasswordReset
 
 # Add this function to handle SQLModel types properly
