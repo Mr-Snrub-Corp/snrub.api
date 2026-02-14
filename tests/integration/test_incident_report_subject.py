@@ -61,9 +61,7 @@ class TestAddSubject:
             "role": "responsible",
         }
 
-        response = client.post(
-            f"/api/incident-reports/{sample_report.uid}/subjects/", json=data, headers=auth_headers
-        )
+        response = client.post(f"/api/incident-reports/{sample_report.uid}/subjects/", json=data, headers=auth_headers)
 
         assert response.status_code == 403
 
@@ -83,9 +81,7 @@ class TestAddSubject:
             "role": "responsible",
         }
 
-        response = client.post(
-            f"/api/incident-reports/{uuid4()}/subjects/", json=data, headers=admin_auth_headers
-        )
+        response = client.post(f"/api/incident-reports/{uuid4()}/subjects/", json=data, headers=admin_auth_headers)
 
         assert response.status_code == 404
 
@@ -188,7 +184,5 @@ class TestCascadeDelete:
         # Verify subject is gone
         from sqlmodel import select
 
-        result = session.exec(
-            select(IncidentReportSubject).where(IncidentReportSubject.uid == subject_uid)
-        ).first()
+        result = session.exec(select(IncidentReportSubject).where(IncidentReportSubject.uid == subject_uid)).first()
         assert result is None

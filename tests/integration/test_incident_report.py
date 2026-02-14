@@ -289,9 +289,7 @@ class TestUpdateIncidentReport:
         assert data["subjects"][0]["user_id"] == str(authenticated_user.uid)
         assert data["subjects"][0]["role"] == "responsible"
 
-    def test_update_without_subjects_preserves_existing(
-        self, session, admin_auth_headers, sample_type, creator_user
-    ):
+    def test_update_without_subjects_preserves_existing(self, session, admin_auth_headers, sample_type, creator_user):
         report = IncidentReport(
             incident_type_id=sample_type.uid,
             severity=4,
@@ -448,9 +446,7 @@ class TestDeleteIncidentReport:
 
         from sqlmodel import select
 
-        result = session.exec(
-            select(IncidentReportSubject).where(IncidentReportSubject.uid == subject_uid)
-        ).first()
+        result = session.exec(select(IncidentReportSubject).where(IncidentReportSubject.uid == subject_uid)).first()
         assert result is None
 
     def test_delete_report_non_admin_forbidden(self, session, auth_headers, sample_type, creator_user):

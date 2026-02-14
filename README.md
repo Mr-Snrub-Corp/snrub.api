@@ -108,11 +108,25 @@ Just run integration tests
 APP_ENV=test uv run pytest tests/integration
 ```
 
-### Ruff Linting / formating 
-```zsh                                                                        
-uv run ruff check . --fix                                            
-uv run ruff format . 
-```   
+### Updating Seed Data
+
+Export current dev DB state (new users + incident reports) to seed-friendly format:
+```zsh
+docker compose exec api python scripts/export_seed_data.py
+```
+- New users are printed as dicts to append to `seeds/data/users.py`, photos written to `seeds/data/photos/`
+- Incident reports are printed as the full `INCIDENT_REPORTS` list for `seeds/data/incident_reports.py`
+
+Seeds run automatically on `docker compose up`. To re-seed manually:
+```zsh
+docker compose exec api python -m seeds.seed_runner
+```
+
+### Ruff Linting / formating
+```zsh
+uv run ruff check . --fix
+uv run ruff format .
+```
 
 
 
