@@ -61,8 +61,14 @@ def get_report(uid: UUID, session: Session):
     return _to_response(report, session)
 
 
-def get_reports(session: Session):
-    reports = session.exec(select(IncidentReport)).all()
+def get_reports(session: Session, offset: int, limit: int | None, status: list[str] | None):
+    query = select(IncidentReport)
+    if status:
+        query = query.where(IncidentReport.status.in_(status))
+    query = query.order_by(IncidentReport.occurred_at.desc()).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    reports = session.exec(query).all()
     return [_to_response(r, session) for r in reports]
 
 
