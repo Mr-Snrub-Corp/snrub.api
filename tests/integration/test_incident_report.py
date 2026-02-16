@@ -190,6 +190,95 @@ class TestGetIncidentReports:
         assert response.status_code == 200
         assert response.json()["subjects"] == []
 
+    def test_get_all_no_query_params(self, session, auth_headers, sample_type, creator_user):
+        reports = []
+        for i in range(3):
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=i + 1,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+            session.add(report)
+            reports.append(report)
+        session.commit()
+
+        response = client.get("/api/incident-reports/", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        returned_uids = {r["uid"] for r in data}
+        for r in reports:
+            assert str(r.uid) in returned_uids
+
+    def test_get_all_with_offset(self, session, auth_headers, sample_type, creator_user):
+        reports = []
+        for i in range(5):
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+            session.add(report)
+            reports.append(report)
+        session.commit()
+
+        all_response = client.get("/api/incident-reports/", headers=auth_headers)
+        all_data = all_response.json()
+
+        offset_response = client.get("/api/incident-reports/?offset=2", headers=auth_headers)
+        offset_data = offset_response.json()
+
+        assert offset_response.status_code == 200
+        assert len(offset_data) == len(all_data) - 2
+
+    def test_get_all_with_limit(self, session, auth_headers, sample_type, creator_user):
+        for i in range(5):
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+            session.add(report)
+        session.commit()
+
+        response = client.get("/api/incident-reports/?limit=2", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+
+    def test_get_all_filter_by_status(self, session, auth_headers, sample_type, creator_user):
+        statuses = [IncidentStatus.RESOLVED, IncidentStatus.CLOSED, IncidentStatus.REPORTED, IncidentStatus.CONFIRMED]
+        for s in statuses:
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=s,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+            session.add(report)
+        session.commit()
+
+        response = client.get("/api/incident-reports/?status=resolved&status=closed", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_statuses = {r["status"] for r in data}
+        assert returned_statuses <= {"resolved", "closed"}
+        assert len(data) >= 2
+
     def test_get_report_not_found(self, session, auth_headers):
         response = client.get(f"/api/incident-reports/{uuid4()}", headers=auth_headers)
 

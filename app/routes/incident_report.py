@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from ..controllers.incident_report import create_report, delete_report, get_report, get_reports, update_report
@@ -22,8 +22,10 @@ async def create_one(
 
 
 @router.get("/", dependencies=[Depends(JWTBearer())])
-async def get_all(session: Session = Depends(get_session)):
-    return get_reports(session)
+async def get_all(
+    session: Session = Depends(get_session), offset: int = 0, limit: int | None = None, status: list[str] = Query(None)
+):
+    return get_reports(session, offset, limit, status)
 
 
 @router.get("/{uid}", dependencies=[Depends(JWTBearer())])
