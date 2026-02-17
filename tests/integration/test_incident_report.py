@@ -290,6 +290,96 @@ class TestGetIncidentReports:
         assert response.status_code == 403
 
 
+class TestFilterByDateRange:
+    """Tests for date_from/date_to filtering on GET /incident-reports/"""
+
+    def _create_reports(self, session, sample_type, creator_user):
+        dates = [datetime(2025, 1, 1), datetime(2025, 2, 1), datetime(2025, 3, 1)]
+        reports = []
+        for d in dates:
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=d,
+            )
+            session.add(report)
+            reports.append(report)
+        session.commit()
+        return reports
+
+    def test_filter_date_from_only(self, session, auth_headers, sample_type, creator_user):
+        reports = self._create_reports(session, sample_type, creator_user)
+        response = client.get("/api/incident-reports/?date_from=2025-01-15T00:00:00", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_uids = {r["uid"] for r in data}
+        assert str(reports[0].uid) not in returned_uids
+        assert str(reports[1].uid) in returned_uids
+        assert str(reports[2].uid) in returned_uids
+
+    def test_filter_date_to_only(self, session, auth_headers, sample_type, creator_user):
+        reports = self._create_reports(session, sample_type, creator_user)
+        response = client.get("/api/incident-reports/?date_to=2025-02-15T00:00:00", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_uids = {r["uid"] for r in data}
+        assert str(reports[0].uid) in returned_uids
+        assert str(reports[1].uid) in returned_uids
+        assert str(reports[2].uid) not in returned_uids
+
+    def test_filter_date_range(self, session, auth_headers, sample_type, creator_user):
+        reports = self._create_reports(session, sample_type, creator_user)
+        response = client.get(
+            "/api/incident-reports/?date_from=2025-01-15T00:00:00&date_to=2025-02-15T00:00:00", headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_uids = {r["uid"] for r in data}
+        assert str(reports[0].uid) not in returned_uids
+        assert str(reports[1].uid) in returned_uids
+        assert str(reports[2].uid) not in returned_uids
+
+    def test_filter_date_range_no_results(self, session, auth_headers, sample_type, creator_user):
+        self._create_reports(session, sample_type, creator_user)
+        response = client.get(
+            "/api/incident-reports/?date_from=2025-04-01T00:00:00&date_to=2025-05-01T00:00:00", headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filter_date_combined_with_status(self, session, auth_headers, sample_type, creator_user):
+        dates = [datetime(2025, 1, 1), datetime(2025, 2, 1), datetime(2025, 3, 1)]
+        statuses = [IncidentStatus.REPORTED, IncidentStatus.CONFIRMED, IncidentStatus.REPORTED]
+        for d, s in zip(dates, statuses):
+            report = IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=s,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=d,
+            )
+            session.add(report)
+        session.commit()
+
+        response = client.get(
+            "/api/incident-reports/?date_from=2025-01-15T00:00:00&status=reported", headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        for r in data:
+            assert r["status"] == "reported"
+            assert r["occurred_at"] >= "2025-01-15T00:00:00"
+
+
 class TestUpdateIncidentReport:
     """Tests for PUT /incident-reports/{uid} endpoint"""
 

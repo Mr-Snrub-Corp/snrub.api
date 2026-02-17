@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -61,10 +62,21 @@ def get_report(uid: UUID, session: Session):
     return _to_response(report, session)
 
 
-def get_reports(session: Session, offset: int, limit: int | None, status: list[str] | None):
+def get_reports(
+    session: Session,
+    offset: int,
+    limit: int | None,
+    status: list[str] | None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+):
     query = select(IncidentReport)
     if status:
         query = query.where(IncidentReport.status.in_(status))
+    if date_from:
+        query = query.where(IncidentReport.occurred_at >= date_from)
+    if date_to:
+        query = query.where(IncidentReport.occurred_at <= date_to)
     query = query.order_by(IncidentReport.occurred_at.desc()).offset(offset)
     if limit is not None:
         query = query.limit(limit)
