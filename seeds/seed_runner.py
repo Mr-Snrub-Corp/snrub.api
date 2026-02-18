@@ -115,14 +115,14 @@ def seed_incident_reports(session: Session) -> None:
         entry = {k: v for k, v in data.items() if k not in ("incident_type_code", "reported_by_email", "subjects")}
         entry["incident_type_id"] = type_lookup[data["incident_type_code"]]
         entry["reported_by_user_id"] = user_lookup[data["reported_by_email"]]
-        entry["occurred_at"] = datetime.fromisoformat(data["occurred_at"])
+        occurred = data["occurred_at"]
+        entry["occurred_at"] = datetime.fromisoformat(occurred) if isinstance(occurred, str) else occurred
 
-        # Upsert by composite key
+        # Upsert by type + description (stable key — occurred_at may be dynamic)
         existing = session.exec(
             select(IncidentReport).where(
                 IncidentReport.incident_type_id == entry["incident_type_id"],
-                IncidentReport.occurred_at == entry["occurred_at"],
-                IncidentReport.reported_by_user_id == entry["reported_by_user_id"],
+                IncidentReport.description == entry["description"],
             )
         ).first()
 
