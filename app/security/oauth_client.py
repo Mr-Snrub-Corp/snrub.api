@@ -2,7 +2,7 @@ from authlib.integrations.starlette_client import OAuth
 
 from app.core.config import settings
 
-oauth = oauth = OAuth()
+oauth = OAuth()
 
 CONF_URL = "https://accounts.google.com/.well-known/openid-configuration"
 

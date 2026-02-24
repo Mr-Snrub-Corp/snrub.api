@@ -22,7 +22,7 @@ async def verify_super_admin_access(token: str = Depends(JWTBearer())):
 
 
 async def verify_admin_access(token: str = Depends(JWTBearer())):
-    """Verify user has creator privileges or higher"""
+    """Verify user has admin privileges or higher"""
     payload = decode_jwt(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")

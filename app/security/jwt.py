@@ -7,11 +7,6 @@ from app.core.config import settings
 from app.models.user import LoginResponse, UserRole
 
 
-def create_token_response(token: str, user_data: dict) -> dict:
-    """Create a response containing both token and user data"""
-    return {"access_token": token, "user": user_data}
-
-
 def sign_jwt(user_uid: UUID, user_data: dict[str, str | UUID | UserRole]) -> LoginResponse:
     """
     Generate and sign a JWT token

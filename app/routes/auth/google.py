@@ -3,14 +3,12 @@ from logging import getLogger
 from authlib.integrations.starlette_client import OAuthError
 from fastapi import APIRouter, Depends
 
-# from sqlmodel import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session
 from starlette.requests import Request
 
 from app.core.config import settings
 
-# from app.db.database import get_session
 from app.db.crud_base import CRUDBase
 from app.db.database import get_session
 from app.models.user import User, UserRole
