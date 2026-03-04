@@ -41,6 +41,9 @@ COMPOSE_PROFILES=vue docker compose up -d --build
 
 # Start with React
 COMPOSE_PROFILES=react docker compose up -d --build
+
+# Down with React
+COMPOSE_PROFILES=react docker compose down -v
 ```
 
 Or set the default in `.env` so you can just run:
