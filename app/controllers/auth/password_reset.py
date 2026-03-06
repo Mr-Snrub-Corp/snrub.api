@@ -102,7 +102,7 @@ def perform_password_reset(reset_data: PerformPasswordResetRequest, session: Ses
     user = user_crud.get(session, token.user_id)
 
     # Update the password using the CRUD helper
-    update_data = UserPasswordUpdate(password=pwd_context.hash(reset_data.new_password))
+    update_data = UserPasswordUpdate(password=pwd_context.hash(reset_data.new_password.get_secret_value()))
     user_crud.update(session, user.uid, update_data)
 
     # Mark token as used - use direct attribute update instead of CRUD update (designed to work with models that have a

@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, SecretStr, field_validator
+
+from app.models.user import validate_password_strength
 
 
 class LoginRequest(BaseModel):
@@ -20,4 +22,9 @@ class PerformPasswordResetRequest(BaseModel):
     """Request model for performing a password reset"""
 
     token: UUID
-    new_password: str
+    new_password: SecretStr
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, password: SecretStr) -> SecretStr:
+        return validate_password_strength(password)

@@ -41,11 +41,7 @@ app.add_middleware(
 
 @app.get("/")
 def hello_world():
-    return {
-        "message": "OK",
-        "debug_mode": settings.DEBUG,
-        "database": settings.POSTGRES_DB,
-    }
+    return {"message": "OK"}
 
 
 # Tags are already defined in each router, don't duplicate them here

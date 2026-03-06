@@ -8,7 +8,7 @@ from sqlmodel import Session
 from app.services.image_processing import process_photo
 
 from ..db.crud_base import CRUDBase
-from ..models.user import User, UserCreateRequest, UserResponse, UserUpdateRequest
+from ..models.user import User, UserCreateRequest, UserResponse, UserRole, UserUpdateRequest
 
 # Set up logger
 logger = getLogger(__name__)
@@ -51,8 +51,14 @@ def get_users(session: Session):
     return [UserResponse.model_validate(user) for user in users]
 
 
-def update_user(uid: UUID, user_data: UserUpdateRequest, session: Session):
+def update_user(uid: UUID, user_data: UserUpdateRequest, session: Session, caller: dict):
     """Update an existing user in the database"""
+    caller_uid = UUID(caller.get("uid"))
+    is_admin = caller.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+
+    if not is_admin and caller_uid != uid:
+        raise HTTPException(status_code=403, detail="Cannot modify other users")
+
     # Get the existing user
     user = user_crud.get(session, uid)
     if not user:
@@ -60,6 +66,12 @@ def update_user(uid: UUID, user_data: UserUpdateRequest, session: Session):
 
     # Extract data from the request, excluding unset fields
     update_data = user_data.model_dump(exclude_unset=True)
+
+    # Non-admins cannot change role or status
+    if not is_admin:
+        for field in ("role", "status"):
+            if field in update_data:
+                raise HTTPException(status_code=403, detail=f"Cannot modify {field}")
 
     # Handle password separately if it's being updated
     if "password" in update_data and update_data["password"] is not None:

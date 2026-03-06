@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session
 
 from app.security.auth_bearer import JWTBearer
-from app.security.authorization import verify_admin_access
+from app.security.authorization import verify_admin_access, verify_self_or_admin
 
 from ..controllers.user import (
     create_user,
@@ -57,15 +57,15 @@ async def get_one(uid: UUID, session: Session = Depends(get_session)):
     return get_user_by_uid(uid, session)
 
 
-@router.put("/{uid}", dependencies=[Depends(JWTBearer())])
-async def update_one(uid: UUID, user_data: UserUpdateRequest, session: Session = Depends(get_session)):
-    """Update an existing user in the system.
-
-    Args:
-        uid: The unique identifier of the user to update
-        user_data: The user update data
-    """
-    return update_user(uid, user_data, session)
+@router.put("/{uid}")
+async def update_one(
+    uid: UUID,
+    user_data: UserUpdateRequest,
+    caller: dict = Depends(verify_self_or_admin),
+    session: Session = Depends(get_session),
+):
+    """Update an existing user in the system."""
+    return update_user(uid, user_data, session, caller)
 
 
 @router.delete("/{uid}", dependencies=[Depends(verify_admin_access)])

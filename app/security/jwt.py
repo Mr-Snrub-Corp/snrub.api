@@ -24,7 +24,7 @@ def sign_jwt(user_uid: UUID, user_data: dict[str, str | UUID | UserRole]) -> Log
     payload = {
         "user_uid": str(user_uid),
         "user_data": user_data,
-        "expires": time.time() + (settings.JWT_EXPIRES_MINUTES * 60),  # Convert minutes to seconds
+        "exp": int(time.time()) + (settings.JWT_EXPIRES_MINUTES * 60),
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
@@ -34,7 +34,11 @@ def sign_jwt(user_uid: UUID, user_data: dict[str, str | UUID | UserRole]) -> Log
 def decode_jwt(token: str) -> dict:
     """Decode and verify a JWT token"""
     try:
-        decoded_token = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        return decoded_token if decoded_token["expires"] >= time.time() else None
-    except (jwt.PyJWTError, jwt.ExpiredSignatureError, KeyError):
+        return jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"require": ["exp"]},
+        )
+    except jwt.PyJWTError:
         return {}

@@ -5,6 +5,14 @@ from app.security.auth_bearer import JWTBearer
 from app.security.jwt import decode_jwt
 
 
+async def verify_self_or_admin(token: str = Depends(JWTBearer())):
+    """Verify user is editing themselves or has admin privileges"""
+    payload = decode_jwt(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return payload.get("user_data", {})
+
+
 async def verify_super_admin_access(token: str = Depends(JWTBearer())):
     """Verify user has admin privileges"""
     payload = decode_jwt(token)

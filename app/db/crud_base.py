@@ -1,8 +1,11 @@
+import logging
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlmodel import Session, SQLModel, select
+
+logger = logging.getLogger(__name__)
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
 
@@ -31,7 +34,8 @@ class CRUDBase(Generic[ModelType]):
             return db_obj
         except Exception as e:
             session.rollback()
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to create %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def get(self, session: Session, uid: UUID) -> ModelType:
         """Get single object from database by primary key"""
@@ -44,7 +48,8 @@ class CRUDBase(Generic[ModelType]):
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to get %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def get_all(self, session: Session) -> list[ModelType]:
         """Get all objects from database table"""
@@ -52,14 +57,16 @@ class CRUDBase(Generic[ModelType]):
             db_objs = session.exec(select(self.model)).all()
             return list(db_objs)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to get all %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def get_by_email(self, session: Session, email: str) -> ModelType | None:
         """Get single object from database by email"""
         try:
             return session.exec(select(self.model).where(self.model.email == email)).first()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to get %s by email", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def create_many(self, session: Session, objects: list[SQLModel]) -> list[ModelType]:
         """Add multiple objects to database"""
@@ -72,7 +79,8 @@ class CRUDBase(Generic[ModelType]):
             return db_objects
         except Exception as e:
             session.rollback()
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to create multiple %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def update(self, session: Session, uid: UUID, obj_in: SQLModel) -> ModelType:
         """Update an object in database by primary key."""
@@ -96,7 +104,8 @@ class CRUDBase(Generic[ModelType]):
             raise
         except Exception as e:
             session.rollback()
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to update %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def delete(self, session: Session, uid: UUID) -> None:
         """Delete an object from database by primary key."""
@@ -111,7 +120,8 @@ class CRUDBase(Generic[ModelType]):
             raise
         except Exception as e:
             session.rollback()
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to delete %s", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def get_multi_by_field(
         self,
@@ -125,7 +135,8 @@ class CRUDBase(Generic[ModelType]):
             db_objs = session.exec(select(self.model).where(field == value)).all()
             return list(db_objs)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to get multiple %s by field", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def get_by_field(
         self,
@@ -138,4 +149,5 @@ class CRUDBase(Generic[ModelType]):
             column = getattr(self.model, field)
             return session.exec(select(self.model).where(column == value)).first()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            logger.exception("Failed to get %s by field", self.model.__name__)
+            raise HTTPException(status_code=500, detail="Internal server error") from e

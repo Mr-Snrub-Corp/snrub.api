@@ -27,8 +27,8 @@ def test_sign_jwt():  # add caplog param for logging
     # Verify token payload
     assert decoded["user_uid"] == str(user_uid), "Token should contain user UID"
     assert decoded["user_data"] == user_data, "Token should contain user data"
-    assert "expires" in decoded, "Token should have expiration"
-    assert decoded["expires"] > time.time(), "Token should not be expired"
+    assert "exp" in decoded, "Token should have expiration"
+    assert decoded["exp"] > time.time(), "Token should not be expired"
 
 
 def test_decode_jwt():
@@ -48,7 +48,15 @@ def test_decode_jwt():
     payload = {
         "user_uid": str(user_uid),
         "user_data": user_data,
-        "expires": time.time() - 100,  # Expired 100 seconds ago
+        "exp": int(time.time()) - 100,  # Expired 100 seconds ago
     }
     expired_token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-    assert decode_jwt(expired_token) is None, "Expired token should return None"
+    assert decode_jwt(expired_token) == {}, "Expired token should return empty dict"
+
+    # Test token without exp claim
+    payload_no_exp = {
+        "user_uid": str(user_uid),
+        "user_data": user_data,
+    }
+    no_exp_token = jwt.encode(payload_no_exp, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    assert decode_jwt(no_exp_token) == {}, "Token without exp should return empty dict"
