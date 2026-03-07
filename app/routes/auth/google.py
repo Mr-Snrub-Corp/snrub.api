@@ -55,7 +55,7 @@ async def callback(request: Request, session: Session = Depends(get_session)):
         user = user_crud.create(session, new_user)
 
     # Generate JWT token and store in session for secure retrieval
-    user_data = {"uid": str(user.uid), "email": user.email, "name": user.name, "role": user.role}
+    user_data = user.to_jwt_data()
     token_response = sign_jwt(user.uid, user_data)
 
     request.session["auth_token"] = token_response.access_token

@@ -20,11 +20,8 @@ def authenticate_user(login_data: LoginRequest, session: Session):
     if not pwd_context.verify(login_data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Basic user data to return
-    user_data = {"uid": str(user.uid), "email": user.email, "name": user.name, "role": user.role}
-
     # Generate JWT token
-    return sign_jwt(user.uid, user_data)
+    return sign_jwt(user.uid, user.to_jwt_data())
 
 
 def logout_user():

@@ -68,6 +68,10 @@ class User(UserBase, table=True):
     created: datetime = Field(default_factory=datetime.utcnow)
     updated: datetime = Field(default_factory=datetime.utcnow)
 
+    def to_jwt_data(self) -> dict:
+        """Build user_data dict for JWT payloads."""
+        return {"uid": str(self.uid), "email": self.email, "name": self.name, "role": self.role}
+
     # Relationship to PasswordReset model
     password_resets: list["PasswordReset"] = Relationship(
         back_populates="user",

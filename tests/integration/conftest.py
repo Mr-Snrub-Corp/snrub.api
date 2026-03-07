@@ -74,14 +74,7 @@ def authenticated_user(session, test_user_data):
 @pytest.fixture
 def auth_token(authenticated_user):
     """Generate JWT token for authenticated user"""
-    user_data = {
-        "uid": str(authenticated_user.uid),
-        "email": authenticated_user.email,
-        "name": authenticated_user.name,
-        "role": authenticated_user.role,
-    }
-
-    token_response = sign_jwt(authenticated_user.uid, user_data)
+    token_response = sign_jwt(authenticated_user.uid, authenticated_user.to_jwt_data())
     return token_response.access_token
 
 
@@ -125,14 +118,7 @@ def admin_user(session, admin_user_data):
 @pytest.fixture
 def admin_auth_token(admin_user):
     """Generate JWT token for admin user"""
-    user_data = {
-        "uid": str(admin_user.uid),
-        "email": admin_user.email,
-        "name": admin_user.name,
-        "role": admin_user.role,
-    }
-
-    token_response = sign_jwt(admin_user.uid, user_data)
+    token_response = sign_jwt(admin_user.uid, admin_user.to_jwt_data())
     return token_response.access_token
 
 
@@ -184,13 +170,7 @@ def creator_user(session):
 
 @pytest.fixture
 def creator_auth_token(creator_user):
-    user_data = {
-        "uid": str(creator_user.uid),
-        "email": creator_user.email,
-        "name": creator_user.name,
-        "role": creator_user.role,
-    }
-    token_response = sign_jwt(creator_user.uid, user_data)
+    token_response = sign_jwt(creator_user.uid, creator_user.to_jwt_data())
     return token_response.access_token
 
 
@@ -246,14 +226,7 @@ def user_with_photo(session, test_user_data, sample_png_bytes):
 @pytest.fixture
 def user_with_photo_auth_token(user_with_photo):
     """Generate JWT token for user with photo"""
-    user_data = {
-        "uid": str(user_with_photo.uid),
-        "email": user_with_photo.email,
-        "name": user_with_photo.name,
-        "role": user_with_photo.role,
-    }
-
-    token_response = sign_jwt(user_with_photo.uid, user_data)
+    token_response = sign_jwt(user_with_photo.uid, user_with_photo.to_jwt_data())
     return token_response.access_token
 
 
