@@ -78,18 +78,23 @@ async def delete_one(uid: UUID, session: Session = Depends(get_session)):
     return delete_user(uid, session)
 
 
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
+PNG_MAGIC_BYTES = b"\x89PNG\r\n\x1a\n"
+
+
 @router.put("/{uid}/photo", dependencies=[Depends(verify_admin_access)])
 async def upload_photo(uid: UUID, file: UploadFile = File(...), session: Session = Depends(get_session)):
-    """Upload a photo for a user.
-
-    Args:
-        uid: The unique identifier of the user
-        file: The PNG image file to upload
-    """
+    """Upload a photo for a user."""
     if file.content_type != "image/png":
         raise HTTPException(status_code=400, detail="Only PNG images are allowed")
 
     photo_data = await file.read()
+
+    if len(photo_data) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+
+    if photo_data[:8] != PNG_MAGIC_BYTES:
+        raise HTTPException(status_code=400, detail="Invalid PNG file")
 
     return upload_user_photo(uid, photo_data, session)
 
