@@ -33,10 +33,25 @@ Clone this repo snrub.api and the frontend [snrub.client](https://github.com/Tho
 In snrub.api
 Copy .env.example -> .env.development and fill in the values
 
-Build with docker for local development 
+Build with docker for local development. The frontend client is controlled via Docker Compose profiles (`vue` or `react`). Set `COMPOSE_PROFILES` in the `.env` file next to `docker-compose.yaml`:
 
 ```zsh
-docker-compose up -d --build
+# Start with Vue (default)
+COMPOSE_PROFILES=vue docker compose up -d --build
+
+# Start with React
+COMPOSE_PROFILES=react docker compose up -d --build
+
+# Down with React
+COMPOSE_PROFILES=react docker compose down -v
+```
+
+Or set the default in `.env` so you can just run:
+```zsh
+# .env
+COMPOSE_PROFILES=vue
+
+docker compose up -d --build
 ```
 
 ### API Documentation

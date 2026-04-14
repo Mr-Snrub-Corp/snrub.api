@@ -30,7 +30,7 @@ fm = FastMail(conf)
 
 async def send_password_reset_email(email: str, token: UUID):
     """Send password reset email with token using Jinja2 template"""
-    reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?token={token}"
 
     message = MessageSchema(
         subject="Password Reset Request",

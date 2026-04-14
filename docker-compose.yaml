@@ -28,14 +28,31 @@ services:
     build:
       context: ../snrub.client
       dockerfile: Dockerfile
-    image: snrub-client:dev # Add
+    image: snrub-client:dev
     container_name: vue-application
     volumes:
-      - ../snrub.client:/vue # Mount source code for hot reloading
-      - /vue/node_modules # Prevent overwriting node_modules with host directory
+      - ../snrub.client:/vue
+      - /vue/node_modules
     ports:
       - "5173:5173"
     restart: "no"
+    profiles:
+      - vue
+
+  react-client:
+    build:
+      context: ../snrub.react
+      dockerfile: Dockerfile
+    image: snrub-react:dev
+    container_name: react-application
+    volumes:
+      - ../snrub.react:/react
+      - /react/node_modules
+    ports:
+      - "5173:5173"
+    restart: "no"
+    profiles:
+      - react
 
   db:
     image: postgres:15-alpine
