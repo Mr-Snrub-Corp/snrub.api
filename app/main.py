@@ -13,6 +13,7 @@ from .routes.incident_category import router as incident_category_router
 from .routes.incident_report import router as incident_report_router
 from .routes.incident_report_subject import router as incident_report_subject_router
 from .routes.incident_type import router as incident_type_router
+from .routes.telemetry import router as telemetry_router
 from .routes.user import router as user_router
 
 # Configure logging
@@ -54,6 +55,7 @@ app.include_router(incident_report_subject_router, prefix="/api")
 app.include_router(local_auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(google_auth_router, prefix="/api")
+app.include_router(telemetry_router, prefix="/api")
 
 
 @app.get("/docs", include_in_schema=False)
