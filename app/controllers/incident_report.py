@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -8,13 +8,13 @@ from ..models.incident_report import (
     IncidentReport,
     IncidentReportCreateRequest,
     IncidentReportResponse,
+    IncidentReportTelemetry,
     IncidentReportUpdateRequest,
 )
 from ..models.incident_report_subject import (
     IncidentReportSubject,
     IncidentReportSubjectResponse,
 )
-
 from ..models.incident_type import IncidentType
 
 
@@ -92,6 +92,31 @@ def get_reports(
         query = query.limit(limit)
     reports = session.exec(query).all()
     return [_to_response(r, session) for r in reports]
+
+
+def get_reports_for_telemetry(
+    session: Session,
+    status: list[str] | None,
+    incident_type_codes: list[str] | None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+):
+    now = datetime.utcnow()
+    if date_to is None:
+        date_to = now
+    if date_from is None:
+        date_from = now - timedelta(weeks=1)
+    rows = session.exec(
+        select(IncidentType.code, IncidentReport.status)
+        .join(IncidentType)
+        .where(IncidentReport.status.in_(status))  # pylint: disable=no-member
+        .where(
+            IncidentType.code.in_(incident_type_codes)  # pylint: disable=no-member
+        )
+        .where(IncidentReport.occurred_at >= date_from)
+        .where(IncidentReport.occurred_at <= date_to)
+    )
+    return [IncidentReportTelemetry(incident_type_code=code, status=status) for code, status in rows]
 
 
 def update_report(uid: UUID, data: IncidentReportUpdateRequest, session: Session):

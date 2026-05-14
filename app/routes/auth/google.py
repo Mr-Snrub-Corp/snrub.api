@@ -61,9 +61,7 @@ async def callback(request: Request, session: Session = Depends(get_session)):
     request.session["auth_token"] = token_response.access_token
     request.session["auth_user"] = user_data
 
-    return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/auth/callback?provider=google&success=true"
-    )
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback?provider=google&success=true")
 
 
 @router.get("/token", response_model=LoginResponse)

@@ -1,11 +1,12 @@
 import asyncio
+from logging import getLogger
+
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from sqlmodel import Session
 
 from app.controllers.telemetry import get_reactor_metrics
 from app.security.jwt import decode_jwt
 
-from logging import getLogger
-from sqlmodel import Session
 from ..db.database import get_session
 
 # Set up logger

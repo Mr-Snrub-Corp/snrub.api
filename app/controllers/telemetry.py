@@ -1,8 +1,7 @@
 from sqlmodel import Session
 
-from app.controllers.incident_report import get_reports
+from app.controllers.incident_report import get_reports_for_telemetry
 from app.services.telemetry import TRACKED_INCIDENT_TYPE_CODES, compute_metrics
-
 
 # class IncidentStatus(StrEnum):
 #     REPORTED = "reported"
@@ -16,10 +15,8 @@ from app.services.telemetry import TRACKED_INCIDENT_TYPE_CODES, compute_metrics
 
 
 def get_reactor_metrics(session: Session):
-    reports = get_reports(
+    reports = get_reports_for_telemetry(
         session,
-        0,
-        20,
         ["reported", "under_review", "confirmed", "mitigation_in_progress"],
         TRACKED_INCIDENT_TYPE_CODES,
     )

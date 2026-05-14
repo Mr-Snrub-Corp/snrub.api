@@ -402,27 +402,29 @@ class TestFilterByIncidentType:
     ):
         other_type = self._make_type(session, sample_category)
 
-        session.add(IncidentReport(
-            incident_type_id=sample_type.uid,
-            severity=3,
-            status=IncidentStatus.REPORTED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
-        session.add(IncidentReport(
-            incident_type_id=other_type.uid,
-            severity=3,
-            status=IncidentStatus.REPORTED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=other_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
         session.commit()
 
-        response = client.get(
-            f"/api/incident-reports/?incident_type_code={sample_type.code}", headers=auth_headers
-        )
+        response = client.get(f"/api/incident-reports/?incident_type_code={sample_type.code}", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -437,14 +439,16 @@ class TestFilterByIncidentType:
         type_c = self._make_type(session, sample_category)
 
         for t in [sample_type, type_b, type_c]:
-            session.add(IncidentReport(
-                incident_type_id=t.uid,
-                severity=3,
-                status=IncidentStatus.REPORTED,
-                escalation_level=EscalationLevel.NONE,
-                reported_by_user_id=creator_user.uid,
-                occurred_at=datetime.utcnow(),
-            ))
+            session.add(
+                IncidentReport(
+                    incident_type_id=t.uid,
+                    severity=3,
+                    status=IncidentStatus.REPORTED,
+                    escalation_level=EscalationLevel.NONE,
+                    reported_by_user_id=creator_user.uid,
+                    occurred_at=datetime.utcnow(),
+                )
+            )
         session.commit()
 
         response = client.get(
@@ -460,19 +464,19 @@ class TestFilterByIncidentType:
         assert str(type_c.uid) not in returned_type_ids
 
     def test_filter_by_incident_type_code_no_matches(self, session, auth_headers, creator_user, sample_type):
-        session.add(IncidentReport(
-            incident_type_id=sample_type.uid,
-            severity=3,
-            status=IncidentStatus.REPORTED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
         session.commit()
 
-        response = client.get(
-            "/api/incident-reports/?incident_type_code=nonexistent_code", headers=auth_headers
-        )
+        response = client.get("/api/incident-reports/?incident_type_code=nonexistent_code", headers=auth_headers)
 
         assert response.status_code == 200
         assert response.json() == []
@@ -482,30 +486,36 @@ class TestFilterByIncidentType:
     ):
         other_type = self._make_type(session, sample_category)
 
-        session.add(IncidentReport(
-            incident_type_id=sample_type.uid,
-            severity=3,
-            status=IncidentStatus.REPORTED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
-        session.add(IncidentReport(
-            incident_type_id=sample_type.uid,
-            severity=3,
-            status=IncidentStatus.CONFIRMED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
-        session.add(IncidentReport(
-            incident_type_id=other_type.uid,
-            severity=3,
-            status=IncidentStatus.REPORTED,
-            escalation_level=EscalationLevel.NONE,
-            reported_by_user_id=creator_user.uid,
-            occurred_at=datetime.utcnow(),
-        ))
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.CONFIRMED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=other_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
         session.commit()
 
         response = client.get(

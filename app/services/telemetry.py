@@ -58,20 +58,90 @@ BASE_RADIATION_LEVEL = 2  # 0 – 500
 BASE_CONTAINMENT_INTEGRITY = 95  # Range: 0 – 100%
 
 
-# STATUS_WEIGHT = {
-#     "REPORTED": 0.3,
-#     "UNDER_REVIEW": 0.6,
-#     "CONFIRMED": 1.0,
-#     "MITIGATION_IN_PROGRESS": 0.5,
-#     "CONTAINED": 0.2,
-#     "RESOLVED": 0.0,
-#     "CLOSED": 0.0,
-#     "FALSE_ALARM": 0.0
-# }
+STATUS_WEIGHT = {
+    "REPORTED": 0.3,
+    "UNDER_REVIEW": 0.6,
+    "CONFIRMED": 1.0,
+    "MITIGATION_IN_PROGRESS": 0.5,
+    "CONTAINED": 0.2,
+    "RESOLVED": 0.0,
+    "CLOSED": 0.0,
+    "FALSE_ALARM": 0.0,
+}
 
 # REPORTED → small impact
 # CONFIRMED → full impact ✅
 # Eg coolant_flow_reduction is effected by status REPORTED it's more effeected by CONFIRMED
+
+# TODO look into MappingProxyType
+INCIDENT_IMPACT_MAP = {
+    # --- Reactor Core ---
+    "unrequested_fission_surplus": {
+        "reactor_power": +20,  # direct cause; pushes clearly into warning range from base 95
+        "core_temperature": +50,  # more fission = more heat; secondary but real
+    },
+    "unauthorised_power_change": {
+        "reactor_power": +15,  # worst-case upward assumption; direction is a guess
+    },
+    "power_instability": {
+        "reactor_power": +10,  # using upward as danger direction; instability could spike either way
+    },
+    "coolant_temperature_exceedance": {
+        "core_temperature": +200,  # this IS the temp exceeding limits; large direct impact
+    },
+    "primary_coolant_loss": {
+        "coolant_flow_rate": -20,  # less coolant = less flow
+        "core_temperature": +150,  # loss of cooling medium = heat accumulates
+    },
+    "heat_exchanger_failure": {
+        "core_temperature": +180,  # heat not dissipated to secondary loop; major impact
+    },
+    # --- Reactivity ---
+    "xenon_poisoning_instability": {
+        "reactivity": -3.0,  # Xe-135 absorbs neutrons; classically suppresses reactivity into negative
+    },
+    "reactivity_excursion_risk": {
+        "reactivity": +3.5,  # excursion = runaway positive reactivity; near danger threshold alone
+        "reactor_power": +10,  # high reactivity drives power output up
+    },
+    "control_rod_anomaly": {
+        "reactivity": +2.0,  # guessing rods stuck withdrawn / not inserting = uncontrolled positive reactivity
+    },
+    # --- Cooling System ---
+    "coolant_flow_reduction": {
+        "coolant_flow_rate": -25,  # this IS the flow being reduced; direct
+        "core_temperature": +50,  # reduced cooling = some heat buildup
+    },
+    "coolant_pump_failure": {
+        "coolant_flow_rate": -35,  # pump failure = near-complete flow loss; worst cooling incident
+        "core_temperature": +100,  # near-complete loss of flow = significant heat rise
+    },
+    "steam_pressure_anomaly": {
+        "coolant_pressure": +40,  # pressure problem; positive = too high. Direction is a guess — anomaly could go either way
+    },
+    "venting_system_malfunction": {
+        "coolant_pressure": +35,  # can't vent steam = pressure builds in primary loop
+    },
+    # --- Radiation & Containment ---
+    "radiation_release_detected": {
+        "radiation_level": +30,  # detected release = immediate meaningful jump from base 2
+        "containment_integrity": -3,  # implies a minor breach allowed the release; guess
+    },
+    "radiation_level_exceedance": {
+        "radiation_level": +50,  # level already exceeding normal; large direct impact
+    },
+    "contamination_event": {
+        "radiation_level": +20,  # spread of contamination raises ambient level
+        "containment_integrity": -5,  # contamination spread often implies containment compromise; guess
+    },
+    "containment_integrity_compromised": {
+        "containment_integrity": -15,  # direct structural damage; single event pushes into warning
+        "radiation_level": +40,  # breach = unshielded radiation escape
+    },
+    "structural_integrity_concern": {
+        "containment_integrity": -8,  # less direct than breach; concern not yet confirmed damage
+    },
+}
 
 
 def noise(data: dict[str, float]) -> dict[str, float]:
@@ -87,170 +157,22 @@ def noise(data: dict[str, float]) -> dict[str, float]:
 
 def compute_metrics(recent_reports: list[IncidentReportResponse]):
     logger.info("compute_metrics: %d recent reports", len(recent_reports))
-    for r in recent_reports:
-        desc = (r.description or "")[:60]
-        logger.info("  occurred_at=%s status=%s desc=%s", r.occurred_at, r.status, desc)
+    # for r in recent_reports:
+    #     desc = (r.description or "")[:60]
+    #     logger.info("  occurred_at=%s status=%s desc=%s", r.occurred_at, r.status, desc)
     base = {
         "reactor_power": BASE_REACTOR_POWER_OUTPUT,
         "core_temperature": BASE_CORE_TEMPERATURE,
         "reactivity": BASE_REACTIVITY,
         "coolant_flow_rate": BASE_COOLANT_FLOW_RATE,
+        "coolant_pressure": BASE_COOLANT_PRESSURE,
         "radiation_level": BASE_RADIATION_LEVEL,
         "containment_integrity": BASE_CONTAINMENT_INTEGRITY,
     }
-    # Implement gardual drift
+
+    for report in recent_reports:
+        logger.info("  status=%s code=%s", report.status, report.incident_type_code)
+    # Implement gradual drift
     # Implement status weight
     base = noise(base)
     return base
-
-
-"""
-1. Reactor Metrics (what to simulate)
-
-These are realistic-but-simplified and map nicely to your incident types.
-
-🔥 Reactor Core
-Reactor Power Output (%)
-Range: 0 – 120%
-Normal: 85 – 100%
-Warning: 100 – 110%
-Danger: >110%
-
-UI:
-→ VU meter / radial gauge (centerpiece metric)
-
-Impacted by:
-
-unrequested_fission_surplus
-unauthorised_power_change
-power_instability
-Core Temperature (°C)
-Range: 200 – 1200°C
-Normal: 500 – 900°C
-Warning: 900 – 1000°C
-Danger: >1000°C
-
-UI:
-→ Vertical thermometer bar
-
-Impacted by:
-
-coolant_temperature_exceedance
-primary_coolant_loss
-heat_exchanger_failure
-Reactivity / Neutron Flux
-Range: -5 to +5 (arbitrary units)
-Normal: -1 to +1
-Warning: +1 to +3
-Danger: >+3
-
-UI:
-→ Oscillating line chart (real-time)
-
-Impacted by:
-
-xenon_poisoning_instability
-reactivity_excursion_risk
-control_rod_anomaly
-💧 Cooling System
-Coolant Flow Rate (%)
-Range: 0 – 100%
-Normal: 70 – 100%
-Warning: 50 – 70%
-Danger: <50%
-
-UI:
-→ Horizontal progress bar
-
-Impacted by:
-
-coolant_flow_reduction
-coolant_pump_failure
-primary_coolant_loss
-Coolant Pressure (bar)
-Range: 0 – 200 bar
-Normal: 120 – 160
-Warning: 100 – 120 or 160 – 180
-Danger: <100 or >180
-
-UI:
-→ Dial gauge
-
-Impacted by:
-
-steam_pressure_anomaly
-venting_system_malfunction
-☢️ Radiation & Containment
-Radiation Level (mSv/h)
-Range: 0 – 500
-Normal: 0 – 5
-Warning: 5 – 50
-Danger: >50
-
-UI:
-→ LED numeric display + blinking when high
-
-Impacted by:
-
-radiation_release_detected
-radiation_level_exceedance
-contamination_event
-Containment Integrity (%)
-Range: 0 – 100%
-Normal: 95 – 100%
-Warning: 85 – 95%
-Danger: <85%
-
-UI:
-→ Ring progress (donut chart)
-
-Impacted by:
-
-containment_integrity_compromised
-structural_integrity_concern
-⚡ Systems & Safety
-Backup Power Status
-Values: ONLINE / DEGRADED / OFFLINE
-
-UI:
-→ Status LED (green/yellow/red)
-
-Impacted by:
-
-backup_power_failure
-power_supply_instability
-Emergency Systems Availability (%)
-Range: 0 – 100%
-Normal: 100%
-Warning: 70 – 99%
-Danger: <70%
-
-UI:
-→ Stacked bar (ECCS, shutdown, alarms)
-
-Impacted by:
-
-emergency_core_cooling_unavailable
-emergency_shutdown_unavailable
-alarm_system_failure
-Alarm System Health
-Values: OK / DEGRADED / FAILED
-
-UI:
-→ Indicator with pulse animation when failed
-
-👷 Human Factor (this is your unique twist)
-Operator Alertness Index
-Range: 0 – 100
-Normal: 80 – 100
-Warning: 50 – 80
-Danger: <50
-
-UI:
-→ Bar with 👀 icon or “fatigue meter”
-
-Impacted by:
-
-operator_asleep_at_station
-operator_intoxicated_at_station
-"""
