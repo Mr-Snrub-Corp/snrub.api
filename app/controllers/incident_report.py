@@ -15,6 +15,8 @@ from ..models.incident_report_subject import (
     IncidentReportSubjectResponse,
 )
 
+from ..models.incident_type import IncidentType
+
 
 def _get_subjects(report_uid: UUID, session: Session) -> list[IncidentReportSubjectResponse]:
     subjects = session.exec(
@@ -67,12 +69,20 @@ def get_reports(
     offset: int,
     limit: int | None,
     status: list[str] | None,
+    incident_type_codes: list[str] | None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ):
     query = select(IncidentReport)
     if status:
-        query = query.where(IncidentReport.status.in_(status))
+        query = query.where(IncidentReport.status.in_(status))  # pylint: disable=no-member
+    if incident_type_codes:
+        # builds an inner SELECT uid FROM incident_types
+        subquery = select(IncidentType.uid).where(
+            # narrows it to just your tracked codes
+            IncidentType.code.in_(incident_type_codes)  # pylint: disable=no-member
+        )
+        query = query.where(IncidentReport.incident_type_id.in_(subquery))  # pylint: disable=no-member
     if date_from:
         query = query.where(IncidentReport.occurred_at >= date_from)
     if date_to:
