@@ -1,0 +1,12 @@
+# Qodo GitHub App — https://docs.qodo.ai/code-review/get-started/configuration-overview/configuration-file
+#
+# Draft PRs: the app ignores webhooks while the PR is a draft (`draft: true`), so
+# `/agentic_*` does not run for draft-opens. Including `opened` handles PRs created
+# already ready for review (non-draft). `ready_for_review` fires when a draft becomes ready.
+
+[github_app]
+handle_pr_actions = ["opened", "reopened", "ready_for_review"]
+pr_commands = [
+    "/agentic_describe",
+    "/agentic_review",
+]
