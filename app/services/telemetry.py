@@ -1,7 +1,7 @@
 import random
 from logging import getLogger
 
-from app.models.incident_report import IncidentReportResponse
+from app.models.incident_report import IncidentReportResponse, IncidentStatus
 
 logger = getLogger(__name__)
 
@@ -58,15 +58,15 @@ BASE_RADIATION_LEVEL = 2  # 0 – 500
 BASE_CONTAINMENT_INTEGRITY = 95  # Range: 0 – 100%
 
 
-STATUS_WEIGHT = {
-    "REPORTED": 0.3,
-    "UNDER_REVIEW": 0.6,
-    "CONFIRMED": 1.0,
-    "MITIGATION_IN_PROGRESS": 0.5,
-    "CONTAINED": 0.2,
-    "RESOLVED": 0.0,
-    "CLOSED": 0.0,
-    "FALSE_ALARM": 0.0,
+STATUS_WEIGHT: dict[IncidentStatus, float] = {
+    IncidentStatus.REPORTED: 0.3,
+    IncidentStatus.UNDER_REVIEW: 0.6,
+    IncidentStatus.CONFIRMED: 1.0,
+    IncidentStatus.MITIGATION_IN_PROGRESS: 0.5,
+    IncidentStatus.CONTAINED: 0.2,
+    IncidentStatus.RESOLVED: 0.0,
+    IncidentStatus.CLOSED: 0.0,
+    IncidentStatus.FALSE_ALARM: 0.0,
 }
 
 # REPORTED → small impact
@@ -144,23 +144,46 @@ INCIDENT_IMPACT_MAP = {
 }
 
 
-def noise(data: dict[str, float]) -> dict[str, float]:
+MULTIPLICATIVE_JITTER = 0.005  # ±0.5%
+ADDITIVE_JITTER = 0.0025  # half of multiplicative band, applied additively at zero
+
+
+def noise(
+    data: dict[str, float],
+    *,
+    rng: random.Random | None = None,
+) -> dict[str, float]:
+    """Apply random noise metrics"""
+    source = rng or random
     result = dict(data)
-    for x in result:
-        multiplier = random.uniform(0.995, 1.005)
-        if not bool(result[x]):
-            result[x] += multiplier
+    for key, value in result.items():
+        if value == 0:
+            result[key] = value + source.uniform(-ADDITIVE_JITTER, ADDITIVE_JITTER)
         else:
-            result[x] *= multiplier
+            result[key] = value * source.uniform(1 - MULTIPLICATIVE_JITTER, 1 + MULTIPLICATIVE_JITTER)
+    return result
+
+
+def apply_impact(
+    data: dict[str, float],
+    incident_type_code: str,
+    status: IncidentStatus,
+) -> dict[str, float]:
+    """Apply INCIDENT_IMPACT_MAP deltas to reports with status weighting"""
+    result = dict(data)
+    if incident_type_code not in INCIDENT_IMPACT_MAP:
+        return result
+    deltas = INCIDENT_IMPACT_MAP[incident_type_code]
+
+    for key, value in deltas.items():
+        # apply delta value & weight to delta key in result
+        result[key] = result[key] + (value * STATUS_WEIGHT[status])
     return result
 
 
 def compute_metrics(recent_reports: list[IncidentReportResponse]):
     logger.info("compute_metrics: %d recent reports", len(recent_reports))
-    # for r in recent_reports:
-    #     desc = (r.description or "")[:60]
-    #     logger.info("  occurred_at=%s status=%s desc=%s", r.occurred_at, r.status, desc)
-    base = {
+    metrics = {
         "reactor_power": BASE_REACTOR_POWER_OUTPUT,
         "core_temperature": BASE_CORE_TEMPERATURE,
         "reactivity": BASE_REACTIVITY,
@@ -172,7 +195,10 @@ def compute_metrics(recent_reports: list[IncidentReportResponse]):
 
     for report in recent_reports:
         logger.info("  status=%s code=%s", report.status, report.incident_type_code)
+        if report.incident_type_code not in INCIDENT_IMPACT_MAP:
+            continue
+        metrics = apply_impact(metrics, report.incident_type_code, report.status)
+
     # Implement gradual drift
-    # Implement status weight
-    base = noise(base)
-    return base
+    metrics = noise(metrics)
+    return metrics
