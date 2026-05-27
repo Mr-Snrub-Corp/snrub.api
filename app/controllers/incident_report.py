@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
+from ..db.crud_base import CRUDBase
 from ..models.incident_report import (
     IncidentReport,
     IncidentReportCreateRequest,
@@ -16,6 +17,9 @@ from ..models.incident_report_subject import (
     IncidentReportSubjectResponse,
 )
 from ..models.incident_type import IncidentType
+from ..models.user import User
+
+report_crud = CRUDBase(IncidentReport)
 
 
 def _get_subjects(report_uid: UUID, session: Session) -> list[IncidentReportSubjectResponse]:
@@ -42,6 +46,9 @@ def _to_response(report: IncidentReport, session: Session) -> IncidentReportResp
 
 
 def create_report(data: IncidentReportCreateRequest, reported_by_user_id: UUID, session: Session):
+    if not session.get(User, reported_by_user_id):
+        raise HTTPException(status_code=401, detail="User not found")
+
     report_dict = data.model_dump(exclude={"subjects"})
     report_dict["reported_by_user_id"] = reported_by_user_id
     report = IncidentReport(**report_dict)
@@ -58,9 +65,7 @@ def create_report(data: IncidentReportCreateRequest, reported_by_user_id: UUID, 
 
 
 def get_report(uid: UUID, session: Session):
-    report = session.exec(select(IncidentReport).where(IncidentReport.uid == uid)).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Incident report not found")
+    report = report_crud.get(session, uid)
     return _to_response(report, session)
 
 
@@ -138,8 +143,4 @@ def update_report(uid: UUID, data: IncidentReportUpdateRequest, session: Session
 
 
 def delete_report(uid: UUID, session: Session):
-    report = session.exec(select(IncidentReport).where(IncidentReport.uid == uid)).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Incident report not found")
-    session.delete(report)
-    session.commit()
+    report_crud.delete(session, uid)

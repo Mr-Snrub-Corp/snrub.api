@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
 from app.models.incident_report_subject import IncidentReportSubject, SubjectRole
+from app.models.user import UserRole
+from app.security.jwt import sign_jwt
 
 client = TestClient(app)
 
@@ -106,6 +108,22 @@ class TestCreateIncidentReport:
         response = client.post("/api/incident-reports/", json=data)
 
         assert response.status_code == 403
+
+    def test_create_report_stale_token_returns_401(self, session, sample_type):
+        ghost_uid = uuid4()
+        token = sign_jwt(
+            ghost_uid,
+            {"uid": str(ghost_uid), "email": "ghost@snrub.com", "name": "Ghost User", "role": UserRole.CREATOR},
+        ).access_token
+        data = {
+            "incident_type_id": str(sample_type.uid),
+            "severity": 3,
+            "occurred_at": "2026-04-26T01:23:00",
+        }
+
+        response = client.post("/api/incident-reports/", json=data, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 401
 
 
 class TestGetIncidentReports:
