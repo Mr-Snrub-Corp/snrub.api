@@ -17,7 +17,6 @@ from ..models.incident_report_subject import (
     IncidentReportSubjectResponse,
 )
 from ..models.incident_type import IncidentType
-from ..models.user import User
 
 report_crud = CRUDBase(IncidentReport)
 
@@ -46,9 +45,6 @@ def _to_response(report: IncidentReport, session: Session) -> IncidentReportResp
 
 
 def create_report(data: IncidentReportCreateRequest, reported_by_user_id: UUID, session: Session):
-    if not session.get(User, reported_by_user_id):
-        raise HTTPException(status_code=401, detail="User not found")
-
     report_dict = data.model_dump(exclude={"subjects"})
     report_dict["reported_by_user_id"] = reported_by_user_id
     report = IncidentReport(**report_dict)
