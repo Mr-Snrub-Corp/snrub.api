@@ -5,11 +5,10 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlmodel import Session
 
 from app.controllers.telemetry import get_reactor_metrics
-from app.security.jwt import decode_jwt
+from app.security.authorization import authenticate_websocket
 
 from ..db.database import get_session
 
-# Set up logger
 logger = getLogger(__name__)
 
 router = APIRouter(tags=["Telemetry"])
@@ -19,9 +18,8 @@ router = APIRouter(tags=["Telemetry"])
 # So needs to be changed  to expect an initial JSON message,
 @router.websocket("/ws/telemetry")
 async def telemetry_stream(websocket: WebSocket, token: str = Query(...), session: Session = Depends(get_session)):
-    payload = decode_jwt(token)
-    if not payload:
-        await websocket.close(code=4401)
+    user_data = await authenticate_websocket(websocket, token, session)
+    if user_data is None:
         return
 
     await websocket.accept()

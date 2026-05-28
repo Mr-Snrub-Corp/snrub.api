@@ -1,12 +1,15 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, WebSocket
 from sqlmodel import Session
 
 from app.db.database import get_session
 from app.models.user import User, UserRole
 from app.security.auth_bearer import JWTBearer
 from app.security.jwt import decode_jwt
+
+WS_CLOSE_UNAUTHORIZED = 4401
+WS_CLOSE_FORBIDDEN = 4403
 
 
 def _verify_jwt_user_exists(user_data: dict, session: Session) -> None:
@@ -51,3 +54,37 @@ verify_admin_access = _require_role(UserRole.ADMIN, UserRole.SUPER_ADMIN, error_
 verify_creator_access = _require_role(
     UserRole.CREATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN, error_msg="Creator privileges required"
 )
+
+
+async def authenticate_websocket(
+    websocket: WebSocket,
+    token: str,
+    session: Session,
+    *allowed_roles: UserRole,
+) -> dict | None:
+    """Authenticate a WebSocket handshake.
+
+    Browsers can't set Authorization headers on WS connections, so JWTBearer
+    can't be used as a Depends here. This helper mirrors _require_role's
+    semantics (decode + role check + user-exists check) for the WS path so
+    auth stays consistent across transports.
+
+    Returns user_data on success. On failure closes the socket and returns None;
+    callers should `return` immediately when None.
+    """
+    payload = decode_jwt(token)
+    if not payload:
+        await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
+        return None
+
+    user_data = payload.get("user_data", {})
+    if allowed_roles and user_data.get("role") not in list(allowed_roles):
+        await websocket.close(code=WS_CLOSE_FORBIDDEN)
+        return None
+
+    uid = user_data.get("uid")
+    if not uid or not session.get(User, UUID(uid)):
+        await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
+        return None
+
+    return user_data
