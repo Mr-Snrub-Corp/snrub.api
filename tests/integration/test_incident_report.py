@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
 from app.models.incident_report_subject import IncidentReportSubject, SubjectRole
+from app.models.user import UserRole
+from app.security.jwt import sign_jwt
 
 client = TestClient(app)
 
@@ -106,6 +108,22 @@ class TestCreateIncidentReport:
         response = client.post("/api/incident-reports/", json=data)
 
         assert response.status_code == 403
+
+    def test_create_report_stale_token_returns_401(self, session, sample_type):
+        ghost_uid = uuid4()
+        token = sign_jwt(
+            ghost_uid,
+            {"uid": str(ghost_uid), "email": "ghost@snrub.com", "name": "Ghost User", "role": UserRole.CREATOR},
+        ).access_token
+        data = {
+            "incident_type_id": str(sample_type.uid),
+            "severity": 3,
+            "occurred_at": "2026-04-26T01:23:00",
+        }
+
+        response = client.post("/api/incident-reports/", json=data, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 401
 
 
 class TestGetIncidentReports:
@@ -378,6 +396,155 @@ class TestFilterByDateRange:
         for r in data:
             assert r["status"] == "reported"
             assert r["occurred_at"] >= "2025-01-15T00:00:00"
+
+
+class TestFilterByIncidentType:
+    """Tests for incident_type_code filtering on GET /incident-reports/"""
+
+    def _make_type(self, session, sample_category):
+        from app.models.incident_type import IncidentType
+
+        t = IncidentType(
+            code=f"test_type_{uuid4().hex[:8]}",
+            name="Other Type",
+            category_id=sample_category.uid,
+            default_severity=2,
+        )
+        session.add(t)
+        session.commit()
+        session.refresh(t)
+        return t
+
+    def test_filter_by_single_incident_type_code(
+        self, session, auth_headers, sample_type, sample_category, creator_user
+    ):
+        other_type = self._make_type(session, sample_category)
+
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=other_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+
+        response = client.get(f"/api/incident-reports/?incident_type_code={sample_type.code}", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_type_ids = {r["incident_type_id"] for r in data}
+        assert str(sample_type.uid) in returned_type_ids
+        assert str(other_type.uid) not in returned_type_ids
+
+    def test_filter_by_multiple_incident_type_codes(
+        self, session, auth_headers, sample_type, sample_category, creator_user
+    ):
+        type_b = self._make_type(session, sample_category)
+        type_c = self._make_type(session, sample_category)
+
+        for t in [sample_type, type_b, type_c]:
+            session.add(
+                IncidentReport(
+                    incident_type_id=t.uid,
+                    severity=3,
+                    status=IncidentStatus.REPORTED,
+                    escalation_level=EscalationLevel.NONE,
+                    reported_by_user_id=creator_user.uid,
+                    occurred_at=datetime.utcnow(),
+                )
+            )
+        session.commit()
+
+        response = client.get(
+            f"/api/incident-reports/?incident_type_code={sample_type.code}&incident_type_code={type_b.code}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        returned_type_ids = {r["incident_type_id"] for r in data}
+        assert str(sample_type.uid) in returned_type_ids
+        assert str(type_b.uid) in returned_type_ids
+        assert str(type_c.uid) not in returned_type_ids
+
+    def test_filter_by_incident_type_code_no_matches(self, session, auth_headers, creator_user, sample_type):
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+
+        response = client.get("/api/incident-reports/?incident_type_code=nonexistent_code", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filter_by_incident_type_code_combined_with_status(
+        self, session, auth_headers, sample_type, sample_category, creator_user
+    ):
+        other_type = self._make_type(session, sample_category)
+
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=sample_type.uid,
+                severity=3,
+                status=IncidentStatus.CONFIRMED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.add(
+            IncidentReport(
+                incident_type_id=other_type.uid,
+                severity=3,
+                status=IncidentStatus.REPORTED,
+                escalation_level=EscalationLevel.NONE,
+                reported_by_user_id=creator_user.uid,
+                occurred_at=datetime.utcnow(),
+            )
+        )
+        session.commit()
+
+        response = client.get(
+            f"/api/incident-reports/?incident_type_code={sample_type.code}&status=reported",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert all(r["incident_type_id"] == str(sample_type.uid) for r in data)
+        assert all(r["status"] == "reported" for r in data)
 
 
 class TestUpdateIncidentReport:

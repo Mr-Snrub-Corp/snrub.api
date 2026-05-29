@@ -12,7 +12,6 @@ from sqlmodel import Session, select
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.database import engine  # noqa: E402
-from app.models.incident_category import IncidentCategory  # noqa: E402
 from app.models.incident_report import IncidentReport  # noqa: E402
 from app.models.incident_report_subject import IncidentReportSubject  # noqa: E402
 from app.models.incident_type import IncidentType  # noqa: E402

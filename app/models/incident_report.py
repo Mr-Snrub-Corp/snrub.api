@@ -80,3 +80,8 @@ class IncidentReportResponse(IncidentReportBase):
     created: datetime
     updated: datetime
     subjects: list[IncidentReportSubjectResponse] = []
+
+
+class IncidentReportTelemetry(SQLModel, table=False):
+    incident_type_code: str
+    status: IncidentStatus

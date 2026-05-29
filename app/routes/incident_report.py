@@ -28,10 +28,11 @@ async def get_all(
     offset: int = 0,
     limit: int | None = None,
     status: list[str] = Query(None),
+    incident_type_codes: list[str] = Query(None, alias="incident_type_code"),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ):
-    return get_reports(session, offset, limit, status, date_from, date_to)
+    return get_reports(session, offset, limit, status, incident_type_codes, date_from, date_to)
 
 
 @router.get("/{uid}", dependencies=[Depends(JWTBearer())])
