@@ -1,3 +1,5 @@
+![Coverage](https://raw.githubusercontent.com/Mr-Snrub-Corp/snrub.api/python-coverage-comment-action-data/badge.svg)
+
 
 
 ## Project structure:
@@ -127,6 +129,22 @@ Just run integration tests
 ```zsh
 APP_ENV=test uv run pytest tests/integration
 ```
+
+### Test Coverage
+
+Line + branch coverage via `coverage.py` / `pytest-cov`. Config in `.coveragerc`.
+
+```zsh
+APP_ENV=test uv run pytest --cov                     # terminal report w/ missing lines
+APP_ENV=test uv run pytest --cov --cov-report=html   # then open htmlcov/index.html
+```
+
+`--cov` is opt-in rather than in `pytest.ini` addopts, since on Python 3.11 coverage
+costs ~20-30% per run.
+
+Coverage measures all of `app/`, so modules that no test imports report 0% rather than
+being dropped from the total. CI posts a coverage comment on every PR and annotates
+uncovered lines in the diff; it does not fail the build on low coverage.
 
 ### Updating Seed Data
 

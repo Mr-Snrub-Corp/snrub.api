@@ -9,6 +9,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      # Post the coverage comment on same-repo PRs.
+      pull-requests: write
+      # Write the coverage badge / history data branch on push to main.
+      contents: write
+
+    env:
+      APP_ENV: test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: test_db
+      JWT_SECRET: test-jwt-secret-for-ci
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRES_MINUTES: 60
+      GOOGLE_CLIENT_ID: placeholder-client-id
+      GOOGLE_CLIENT_SECRET: placeholder-client-secret
+      GOOGLE_AUTH_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+
     services:
       postgres:
         image: postgres:latest
@@ -25,51 +45,42 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          uv sync --frozen
+        run: uv sync --frozen
 
       - name: Run database migrations
-        run: |
-          uv run alembic upgrade head
-        env:
-          APP_ENV: test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_DB: test_db
-          JWT_SECRET: test-jwt-secret-for-ci
-          JWT_ALGORITHM: HS256
-          JWT_EXPIRES_MINUTES: 60
-          GOOGLE_CLIENT_ID: placeholder-client-id
-          GOOGLE_CLIENT_SECRET: placeholder-client-secret
-          GOOGLE_AUTH_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+        run: uv run alembic upgrade head
 
       - name: Run tests
-        run: |
-          uv run pytest -v
-        env:
-          APP_ENV: test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_DB: test_db
-          JWT_SECRET: test-jwt-secret-for-ci
-          JWT_ALGORITHM: HS256
-          JWT_EXPIRES_MINUTES: 60
-          GOOGLE_CLIENT_ID: placeholder-client-id
-          GOOGLE_CLIENT_SECRET: placeholder-client-secret
-          GOOGLE_AUTH_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+        run: uv run pytest -v --cov --cov-report=term-missing
+
+      - name: Coverage comment
+        id: coverage_comment
+        uses: py-cov-action/python-coverage-comment-action@v4.3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 80
+          MINIMUM_ORANGE: 60
+          ANNOTATE_MISSING_LINES: true
+          ANNOTATION_TYPE: notice
+
+      # Fork PRs get a read-only token, so the step above writes the comment to a
+      # file instead of posting it. coverage.yaml picks this up and posts it.
+      - name: Store coverage comment for fork PRs
+        uses: actions/upload-artifact@v4
+        if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt

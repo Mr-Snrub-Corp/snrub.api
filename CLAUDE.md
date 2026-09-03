@@ -33,7 +33,13 @@ APP_ENV=test uv run pytest tests/integration        # Integration tests only
 APP_ENV=test uv run pytest tests/unit               # Unit tests only
 APP_ENV=test uv run pytest tests/integration/test_auth_login.py  # Single file
 APP_ENV=test uv run pytest -v                       # Verbose output
+APP_ENV=test uv run pytest --cov                    # With coverage (term report)
+APP_ENV=test uv run pytest --cov --cov-report=html  # HTML report -> htmlcov/
 ```
+Coverage config lives in `.coveragerc` (line + branch, `source = app`), NOT in
+`pyproject.toml`. Note `pytest.ini` takes precedence over `[tool.pytest.ini_options]`
+in `pyproject.toml`, so pytest settings added to pyproject are silently ignored.
+CI comments coverage on PRs; it does not gate on it.
 
 ### Linting (Ruff)
 ```bash
