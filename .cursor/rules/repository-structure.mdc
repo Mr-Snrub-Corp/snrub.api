@@ -1,0 +1,38 @@
+---
+description: snrub.api layout and layer responsibilities
+alwaysApply: true
+---
+
+# snrub.api layout
+
+FastAPI API paired with Vue client (`../snrub.client`). Docker local stack: API, Postgres, Mailhog, client.
+
+```
+snrub.api/
+├── app/
+│   ├── controllers/   # Business logic (MVC controllers)
+│   ├── core/          # Settings / config (Pydantic Settings)
+│   ├── db/            # Engine, sessions, CRUDBase
+│   ├── models/        # SQLModel tables + request/response schemas
+│   ├── routes/        # FastAPI routers (HTTP + WS); prefixed /api
+│   ├── security/      # JWT, bearer auth, role checks, OAuth
+│   ├── services/      # Side effects (email, images, telemetry, …)
+│   └── main.py
+├── migrations/        # Alembic
+├── tests/             # unit/ + integration/
+├── scripts/
+├── alembic.ini
+├── docker-compose.yaml
+├── pyproject.toml
+├── pytest.ini
+└── ruff.toml
+```
+
+## Layer notes
+
+- Routes: thin HTTP/WS; auth via `JWTBearer` / `verify_*_access` (WS: `authenticate_websocket`)
+- Controllers: orchestration; prefer domain results over framework coupling when practical
+- Services: non-CRUD side effects and domain calculation
+- Models: SQLModel table + separate Pydantic API schemas
+- Auth: JWT bearer + role checks in `security/`; local email/password and Google OAuth under `routes/auth/`
+- Cross-cutting: keep CORS and security headers correct for the Vue/React clients; validate request bodies via Pydantic schemas
