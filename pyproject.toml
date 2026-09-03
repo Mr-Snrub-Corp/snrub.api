@@ -29,5 +29,6 @@ dependencies = [
 dev = [
     "mimesis>=19.1.0",
     "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
     "ruff>=0.14.14",
 ]

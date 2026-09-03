@@ -1,0 +1,30 @@
+# Posts the coverage comment for PRs opened from forks.
+#
+# A fork PR's GITHUB_TOKEN is read-only, so the "Coverage comment" step in
+# test.yaml cannot post; it uploads the rendered comment as an artifact instead.
+# workflow_run fires in the base repo's trusted context, where the token can write.
+#
+# GitHub reads workflow_run triggers from the default branch only, so this file
+# has no effect until it lands on main. Same-repo PRs are posted directly by
+# test.yaml and do not depend on this workflow.
+name: Post coverage comment
+
+on:
+  workflow_run:
+    workflows: ["Python Tests"]
+    types: [completed]
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      actions: read
+      contents: read
+    steps:
+      - name: Post comment
+        uses: py-cov-action/python-coverage-comment-action@v4
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PR_RUN_ID: ${{ github.event.workflow_run.id }}

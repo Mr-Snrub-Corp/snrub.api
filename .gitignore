@@ -15,4 +15,10 @@ wheels/
 .env.development
 .env.production
 
- .claude/settings.local.json
+.claude/settings.local.json
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

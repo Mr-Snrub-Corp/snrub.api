@@ -1,0 +1,21 @@
+# coverage.py config. Kept out of pyproject.toml to match the repo's
+# per-tool config pattern (pytest.ini, ruff.toml).
+
+[run]
+source = app
+branch = true
+# Required by python-coverage-comment-action: it computes the report inside a
+# Docker container, so absolute runner paths would not map back to repo files.
+relative_files = true
+
+[report]
+show_missing = true
+precision = 1
+exclude_also =
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    @(abc\.)?abstractmethod
+
+[html]
+directory = htmlcov
