@@ -66,6 +66,47 @@ jobs:
       - name: Run tests
         run: uv run pytest -v --cov --cov-report=term-missing
 
+      # The headline coverage number is inflated by import-time lines -- imports,
+      # decorators, SQLModel field declarations -- which execute as soon as the
+      # suite imports the app, test or no test. This reports the same data split
+      # into import-time vs function-body buckets. Always generated so the run
+      # summary has it on pushes to main too; only commented on PRs.
+      - name: Body coverage report
+        run: |
+          {
+            echo '<!-- body-coverage -->'
+            echo '### Coverage excluding import-time lines'
+            echo
+            echo 'Imports, decorators and field declarations run on import whether or not a'
+            echo 'test exists. Below is the same coverage data with those separated out --'
+            echo '`function body` is the figure that moves when you write a test.'
+            echo
+            uv run python scripts/coverage_body.py --markdown
+          } > body-coverage.md
+          cat body-coverage.md >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ github.event.pull_request.number }}" > body-coverage-pr.txt
+
+      - name: Post body coverage comment
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/pr-comment.sh "${{ github.event.pull_request.number }}" body-coverage.md '<!-- body-coverage -->'
+
+      # Fork PRs get a read-only token, so hand the body off to coverage.yaml,
+      # which runs in the base repo's trusted context.
+      - name: Store body coverage for fork PRs
+        uses: actions/upload-artifact@v4
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+        with:
+          name: body-coverage
+          path: |
+            body-coverage.md
+            body-coverage-pr.txt
+
       - name: Coverage comment
         id: coverage_comment
         uses: py-cov-action/python-coverage-comment-action@v4.3
