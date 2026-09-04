@@ -196,17 +196,18 @@ class TestGetAll:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="TODO: last uncovered branch in crud_base -- get_all's except (lines 59-61)")
-def test_get_all_wraps_db_error_as_500(session):
-    """get_all should convert a DB-layer failure into a 500, not propagate it.
+def test_get_all_wraps_db_error_as_500(session, monkeypatch):
+    """get_all should convert a DB-layer failure into a 500, not propagate it."""
 
-    Every other except block here is reachable with a real constraint violation
-    or a bad field name; get_all takes no arguments, so it needs the session
-    itself to fail. Options: monkeypatch `session.exec` to raise, or close the
-    underlying connection first. Pick whichever you'd rather see repeated for
-    the other methods, since it sets the pattern.
-    """
-    raise NotImplementedError
+    def boom(*args, **kwargs):
+        raise RuntimeError("connection lost")
+
+    # monkeypatch is a built-in pytest fixture that temporarily reassigns an attribute and
+    # puts the original back at teardown.
+    monkeypatch.setattr(session, "exec", boom)
+    with pytest.raises(HTTPException) as exc:
+        category_crud.get_all(session)
+    assert exc.value.status_code == 500
 
 
 @pytest.mark.skip(reason="TODO: assert exclude_unset semantics -- executed today but nothing checks it")
