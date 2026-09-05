@@ -91,25 +91,35 @@ def test_callback_oauth_error_redirects_with_failure(session, monkeypatch):
     raise NotImplementedError
 
 
-@pytest.mark.skip(reason="TODO: /token happy path -- google.py lines 70-71, 74")
 def test_token_returns_jwt_and_clears_session(session, google_returns):
     """GET /token should hand back the JWT the callback stashed, exactly once.
-
-    Call the callback first so the session cookie is set, then GET
-    /api/auth/google/token on the same client. Assert the response carries an
-    access_token plus the user payload, and that an immediate second call now
-    returns 401 -- the values are popped, so the token is single-use.
+    Assert the response carries an access_token plus the user payload,
+    and that an immediate second call now returns 401 -- the values are popped,
+    so the token is single-use.
     """
-    raise NotImplementedError
+    email = Person().email()
+    google_returns(email)
+
+    response = client.get(CALLBACK, follow_redirects=False)
+    print("callback", response.status_code, response.headers.get("location"))
+
+    token = client.get("/api/auth/google/token", follow_redirects=False)
+    print("token", token.status_code, token.json())
+    data = token.json()
+    assert data["access_token"] is not None
+    assert data["user"] is not None
+    assert data["user"]["email"] == email
+    repeat_call = client.get("/api/auth/google/token", follow_redirects=False)
+    assert repeat_call.status_code == 401
 
 
 @pytest.mark.skip(reason="TODO: /token auth-bypass guard -- google.py lines 72-73")
 def test_token_without_pending_auth_returns_401(session):
     """GET /token with no prior callback must be rejected.
 
-    Use a fresh TestClient so no session cookie is present. This is the guard
+        Use a fresh TestClient so no session cookie is present. This is the guard
     stopping anyone from pulling a token straight out of the endpoint, so it is
-    worth pinning even though it is a two-line branch.
+        worth pinning even though it is a two-line branch.
     """
     raise NotImplementedError
 
