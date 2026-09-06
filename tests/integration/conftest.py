@@ -129,6 +129,50 @@ def admin_auth_headers(admin_auth_token):
 
 
 @pytest.fixture
+def super_admin_user_data():
+    """Generate test super admin user data"""
+    person = Person()
+    return {
+        "email": person.email(),
+        "name": person.full_name(),
+        "role": UserRole.SUPER_ADMIN,
+        "password": "SuperAdminPass123!",
+    }
+
+
+@pytest.fixture
+def super_admin_user(session, super_admin_user_data):
+    """Create a super admin user in the database and return user object"""
+    hashed_password = pwd_context.hash(super_admin_user_data["password"])
+
+    user = User(
+        uid=uuid4(),
+        email=super_admin_user_data["email"],
+        name=super_admin_user_data["name"],
+        role=super_admin_user_data["role"],
+        password=hashed_password,
+    )
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def super_admin_auth_token(super_admin_user):
+    """Generate JWT token for super admin user"""
+    token_response = sign_jwt(super_admin_user.uid, super_admin_user.to_jwt_data())
+    return token_response.access_token
+
+
+@pytest.fixture
+def super_admin_auth_headers(super_admin_auth_token):
+    """Generate authorization headers for super admin user"""
+    return {"Authorization": f"Bearer {super_admin_auth_token}"}
+
+
+@pytest.fixture
 def sample_category(session):
     cat = IncidentCategory(code=f"test_cat_{uuid4().hex[:8]}", name="Test Category")
     session.add(cat)
@@ -149,6 +193,32 @@ def sample_type(session, sample_category):
     session.commit()
     session.refresh(t)
     return t
+
+
+@pytest.fixture
+def godmode_incident_types(session, sample_category):
+    """Ensure the five God-mode lever incident types exist (idempotent get-or-create)."""
+    from sqlmodel import select
+
+    from app.controllers.godmode import LEVER_CODE_MAP
+
+    types = {}
+    for code in LEVER_CODE_MAP.values():
+        existing = session.exec(select(IncidentType).where(IncidentType.code == code)).first()
+        if existing:
+            types[code] = existing
+            continue
+        t = IncidentType(
+            code=code,
+            name=code.replace("_", " ").title(),
+            category_id=sample_category.uid,
+            default_severity=5,
+        )
+        session.add(t)
+        session.commit()
+        session.refresh(t)
+        types[code] = t
+    return types
 
 
 @pytest.fixture
