@@ -113,15 +113,14 @@ def test_token_returns_jwt_and_clears_session(session, google_returns):
     assert repeat_call.status_code == 401
 
 
-@pytest.mark.skip(reason="TODO: /token auth-bypass guard -- google.py lines 72-73")
+# @pytest.mark.skip(reason="TODO: /token auth-bypass guard -- google.py lines 72-73")
 def test_token_without_pending_auth_returns_401(session):
-    """GET /token with no prior callback must be rejected.
-
-        Use a fresh TestClient so no session cookie is present. This is the guard
-    stopping anyone from pulling a token straight out of the endpoint, so it is
-        worth pinning even though it is a two-line branch.
-    """
-    raise NotImplementedError
+    """GET /token with no prior callback must be rejected."""
+    # leftover client state so create a new one
+    new_client = TestClient(app)
+    token = new_client.get("/api/auth/google/token", follow_redirects=False)
+    assert token.status_code == 401
+    assert token.json() == {"detail": "No pending authentication"}
 
 
 @pytest.mark.skip(reason="TODO: /login redirect -- google.py lines 25-26")
