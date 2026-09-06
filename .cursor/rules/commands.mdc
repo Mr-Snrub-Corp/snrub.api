@@ -1,0 +1,47 @@
+---
+description: Dev, test, lint, and migration commands plus environment setup for snrub.api
+alwaysApply: false
+---
+
+# Commands & setup
+
+## Docker (local dev)
+```bash
+docker compose up -d --build   # build + start all services
+docker compose logs -f api     # API logs
+docker compose down            # stop
+```
+
+## Testing (Docker must run for integration)
+```bash
+APP_ENV=test uv run pytest                          # all
+APP_ENV=test uv run pytest tests/unit               # unit
+APP_ENV=test uv run pytest tests/integration        # integration
+APP_ENV=test uv run pytest tests/integration/test_auth_login.py  # single file
+APP_ENV=test uv run pytest -v                       # verbose
+APP_ENV=test uv run pytest --cov                    # coverage (term)
+APP_ENV=test uv run pytest --cov --cov-report=html  # HTML -> htmlcov/
+```
+Coverage config is in `.coveragerc` (line + branch, `source = app`), NOT `pyproject.toml`.
+`pytest.ini` overrides `[tool.pytest.ini_options]`, so pytest settings in pyproject are ignored.
+CI comments coverage on PRs; it does not gate.
+
+## Lint / format (Ruff)
+```bash
+uv run ruff check .            # lint
+uv run ruff check . --fix      # auto-fix (local only)
+uv run ruff format .           # format (local only)
+uv run ruff format --check .   # CI / handover check
+```
+Line length 120, target py311, ignores B008 (FastAPI `Depends()` defaults), excludes `migrations/`, `lib/`, `venv/`. CI is check-only (no `--fix`).
+
+## Migrations (Alembic)
+```bash
+docker compose exec api alembic revision --autogenerate -m "Description"
+docker compose exec api alembic upgrade head
+```
+
+## Environment
+Copy `.env.example` to `.env.development` and `.env.test`; `APP_ENV` selects the file
+(default `.env.development`, `test` for tests). Key vars: `POSTGRES_*`, `JWT_*`,
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `MAIL_*`, `FRONTEND_URL`.

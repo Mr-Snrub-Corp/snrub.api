@@ -5,61 +5,45 @@ alwaysApply: true
 
 # Communication
 
-Be concise. Sacrifice grammar for concision. Applies to all
-interactions and commit messages. Avoid flattery.
+Be concise. Sacrifice grammar for concision. Applies to all interactions and
+commit messages. Avoid flattery. Avoid jargon.
 
 ## Verify first
 
-Before doing any work, state how you could verify that work — the concrete
-check that proves it does what it should (which script to run, what output to
-expect, what to observe in the app). Then do the work, then run that check.
+Before doing any work, state how you could verify it — the concrete check that
+proves it works (which script to run, expected output, what to observe). Then
+do the work, then run that check.
 
 ## Before handover
 
-After finishing work, before saying done:
-- Run `uv run ruff check .` and `uv run ruff format --check .`
-- Fix issues you introduced
+Before saying done:
+- Run `uv run ruff check .` and `uv run ruff format --check .`; fix issues you introduced
 - If tests were in scope, run the relevant pytest
+
 Do not hand over with known lint/format failures. CI lint is check-only
 (no `--fix`); a red check means the author must fix locally and push.
 
 # Process
 
-- App follows layered MVC: Routes → Controllers → CRUDBase/Services → Models → DB
 - Keep the API stateless; persist state in Postgres (not process memory)
 - Prefer FastAPI async for I/O-bound paths (WS, external calls); sync OK for simple DB handlers
 - Use structured logging; avoid ad-hoc print debugging in committed code
 - Follow DRY
-- Use CRUD helpers in `app/db/crud_base.py` for DB interactions
-- Branches: `feature/` or `bug/` prefix; never commit straight to `main`
-- GitHub via `gh` CLI
+- Branches: `feature/` or `bug/` prefix; never commit to `main` (protected). GitHub via `gh` CLI
 
 # Tools
 
-## Python / packages
+- Python: use `uv` (never `uv pip` / `pip`); add deps with `uv add`
+- Lint/format: `uv run ruff` (config in `ruff.toml`); don't edit `.toml` files unless instructed
+- Typing: no bare `typing.Any`; if unavoidable, add `FIXME` with reason. Don't fix errors tied to `FIXME` comments
 
-- Use `uv` for env and project management. Never `uv pip` or `pip`
-- Add deps with `uv add`
-- Lint/format with `uv run ruff` (config in `ruff.toml`)
-- Do not edit `.toml` files unless explicitly instructed
-
-## Typing and linting
-
-- Follow `ruff.toml`
-- Do not use bare `typing.Any`; if unavoidable, comment with `FIXME` and why
-- Do not fix errors associated with `FIXME` comments
-
-## Testing
+# Testing
 
 - Only `pytest`. Docker must be running for integration tests
-- Do not mock unless explicitly directed
-- Prefer existing fixtures — check local then parent `conftest.py` before adding new ones
+- Don't mock unless explicitly directed
+- Prefer existing fixtures — check local then parent `conftest.py` before adding
 - Fake data via mimesis
-- Unit tests: isolate functions; no seeded DB or external services
-- Integration tests: real test DB (`APP_ENV=test`); sessions roll back per test
+- Unit: isolate functions; no seeded DB or external services
+- Integration: real test DB (`APP_ENV=test`); sessions roll back per test. Fixtures in `tests/integration/conftest.py` (e.g. `authenticated_user`, `admin_user`, `auth_headers`, `admin_auth_headers`)
 
-```bash
-APP_ENV=test uv run pytest
-APP_ENV=test uv run pytest tests/unit
-APP_ENV=test uv run pytest tests/integration
-```
+Commands / env setup: see `commands.mdc`.

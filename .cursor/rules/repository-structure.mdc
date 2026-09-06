@@ -1,38 +1,30 @@
 ---
-description: snrub.api layout and layer responsibilities
+description: snrub.api stack, layered architecture, and key patterns
 alwaysApply: true
 ---
 
-# snrub.api layout
+# snrub.api
 
-FastAPI API paired with Vue client (`../snrub.client`). Docker local stack: API, Postgres, Mailhog, client.
+FastAPI REST API (Python 3.11+, SQLModel, PostgreSQL via psycopg3, UV). Runs in Docker
+alongside Vue + React dashboard clients (`../snrub.client`), Postgres, and Mailhog.
 
-```
-snrub.api/
-├── app/
-│   ├── controllers/   # Business logic (MVC controllers)
-│   ├── core/          # Settings / config (Pydantic Settings)
-│   ├── db/            # Engine, sessions, CRUDBase
-│   ├── models/        # SQLModel tables + request/response schemas
-│   ├── routes/        # FastAPI routers (HTTP + WS); prefixed /api
-│   ├── security/      # JWT, bearer auth, role checks, OAuth
-│   ├── services/      # Side effects (email, images, telemetry, …)
-│   └── main.py
-├── migrations/        # Alembic
-├── tests/             # unit/ + integration/
-├── scripts/
-├── alembic.ini
-├── docker-compose.yaml
-├── pyproject.toml
-├── pytest.ini
-└── ruff.toml
-```
+Layered flow (under `app/`): Routes → Controllers → CRUDBase/Services → Models → DB.
+For the current file tree, use codegraph (`codegraph_files` / `codegraph_explore`) — don't rely on a hand-maintained tree.
 
-## Layer notes
+## Layer conventions
 
-- Routes: thin HTTP/WS; auth via `JWTBearer` / `verify_*_access` (WS: `authenticate_websocket`)
-- Controllers: orchestration; prefer domain results over framework coupling when practical
-- Services: non-CRUD side effects and domain calculation
+- Routes: thin HTTP/WS, all prefixed `/api`; auth via `JWTBearer` / `verify_*_access` (WS: `authenticate_websocket`)
+- Controllers: orchestration; prefer domain results over framework coupling
+- Services: non-CRUD side effects + domain calculation (email, images, telemetry)
 - Models: SQLModel table + separate Pydantic API schemas
-- Auth: JWT bearer + role checks in `security/`; local email/password and Google OAuth under `routes/auth/`
-- Cross-cutting: keep CORS and security headers correct for the Vue/React clients; validate request bodies via Pydantic schemas
+- DB: use CRUD helpers in `app/db/crud_base.py` (default PK field `uid`)
+- Auth/security in `security/`: JWT bearer + role checks; local email/password + Google OAuth under `routes/auth/`
+- Keep CORS + security headers correct for the Vue/React clients; validate request bodies via Pydantic schemas
+
+## Key patterns
+
+- DI: `Depends(get_session)` (DB), `Depends(JWTBearer())` (auth), `Depends(verify_admin_access)` (roles)
+- Roles: `UserRole` — VIEWER, CREATOR, ADMIN, SUPER_ADMIN (admin endpoints require ADMIN/SUPER_ADMIN)
+- Status: `UserStatus` — ACTIVE, INACTIVE, DECEASED, SUSPENDED
+- Password hashing: bcrypt via passlib (`pwd_context` in `controllers/user.py`)
+- API docs: Scalar UI at `/docs` (Swagger disabled)
