@@ -117,7 +117,7 @@ INCIDENT_IMPACT_MAP = {
         "core_temperature": +100,  # near-complete loss of flow = significant heat rise
     },
     "steam_pressure_anomaly": {
-        "coolant_pressure": +40,  # pressure problem; positive = too high. Direction is a guess — anomaly could go either way
+        "coolant_pressure": +40,  # pressure problem; positive = too high. Direction is a guess — could go either way
     },
     "venting_system_malfunction": {
         "coolant_pressure": +35,  # can't vent steam = pressure builds in primary loop

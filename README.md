@@ -166,6 +166,8 @@ uv run ruff check . --fix
 uv run ruff format .
 ```
 
+CI runs `ruff check` and `ruff format --check` (no `--fix`) and fails the PR; fix locally and push.
+
 
 
 

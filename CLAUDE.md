@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision 
+- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision
+- Before handover: run `uv run ruff check .` and `uv run ruff format --check .`; fix issues you introduced; if tests were in scope, run the relevant pytest. Do not hand over with known lint/format failures. CI lint is check-only (no `--fix`); a red check means the author must fix locally and push. 
 
 ## Github
 
@@ -43,11 +44,12 @@ CI comments coverage on PRs; it does not gate on it.
 
 ### Linting (Ruff)
 ```bash
-ruff check .            # Lint
-ruff check . --fix      # Auto-fix
-ruff format .           # Format
+uv run ruff check .            # Lint
+uv run ruff check . --fix      # Auto-fix (local only)
+uv run ruff format .           # Format (local only)
+uv run ruff format --check .   # CI / handover check
 ```
-Line length: 120. Target: py311. Ignores B008 (function call in default args, needed for FastAPI `Depends()`). Excludes `migrations/`, `lib/`, `venv/`.
+Line length: 120. Target: py311. Ignores B008 (function call in default args, needed for FastAPI `Depends()`). Excludes `migrations/`, `lib/`, `venv/`. CI runs check-only (no `--fix`); a red check means the author must fix locally and push.
 
 ### Database Migrations (Alembic)
 ```bash

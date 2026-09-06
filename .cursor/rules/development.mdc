@@ -14,6 +14,15 @@ Before doing any work, state how you could verify that work — the concrete
 check that proves it does what it should (which script to run, what output to
 expect, what to observe in the app). Then do the work, then run that check.
 
+## Before handover
+
+After finishing work, before saying done:
+- Run `uv run ruff check .` and `uv run ruff format --check .`
+- Fix issues you introduced
+- If tests were in scope, run the relevant pytest
+Do not hand over with known lint/format failures. CI lint is check-only
+(no `--fix`); a red check means the author must fix locally and push.
+
 # Process
 
 - App follows layered MVC: Routes → Controllers → CRUDBase/Services → Models → DB
@@ -31,7 +40,7 @@ expect, what to observe in the app). Then do the work, then run that check.
 
 - Use `uv` for env and project management. Never `uv pip` or `pip`
 - Add deps with `uv add`
-- Lint/format with `uvx ruff` (config in `ruff.toml`)
+- Lint/format with `uv run ruff` (config in `ruff.toml`)
 - Do not edit `.toml` files unless explicitly instructed
 
 ## Typing and linting

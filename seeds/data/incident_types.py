@@ -53,7 +53,9 @@ INCIDENT_TYPES = [
     {
         "code": "primary_coolant_loss",
         "name": "Primary Coolant Loss",
-        "description": "Loss or significant reduction of primary coolant inventory affecting reactor heat removal capability.",
+        "description": (
+            "Loss or significant reduction of primary coolant inventory affecting reactor heat removal capability."
+        ),
         "category_code": "cooling_system",
         "default_severity": 7,
     },
@@ -167,7 +169,9 @@ INCIDENT_TYPES = [
     {
         "code": "instrumentation_unreliable",
         "name": "Instrumentation Unreliable",
-        "description": "Monitoring or control instrumentation produced inaccurate, inconsistent, or unavailable readings.",
+        "description": (
+            "Monitoring or control instrumentation produced inaccurate, inconsistent, or unavailable readings."
+        ),
         "category_code": "safety_instrumentation",
         "default_severity": 5,
     },
@@ -224,7 +228,10 @@ INCIDENT_TYPES = [
     {
         "code": "documentation_noncompliance",
         "name": "Documentation Noncompliance",
-        "description": "Required operational or maintenance records are incomplete, missing, or not filed in accordance with compliance procedures.",
+        "description": (
+            "Required operational or maintenance records are incomplete, "
+            "missing, or not filed in accordance with compliance procedures."
+        ),
         "category_code": "procedure_deviation",
         "default_severity": 2,
     },
@@ -303,14 +310,20 @@ INCIDENT_TYPES = [
     {
         "code": "structural_integrity_concern",
         "name": "Structural Integrity Concern",
-        "description": "Observed or suspected degradation of structural components affecting containment, support systems, or operational safety margins.",
+        "description": (
+            "Observed or suspected degradation of structural components affecting containment, "
+            "support systems, or operational safety margins."
+        ),
         "category_code": "infrastructure",
         "default_severity": 5,
     },
     {
         "code": "environmental_control_failure",
         "name": "Environmental Control Failure",
-        "description": "Failure of systems responsible for maintaining controlled environmental conditions within operational areas.",
+        "description": (
+            "Failure of systems responsible for maintaining controlled environmental "
+            "conditions within operational areas."
+        ),
         "category_code": "infrastructure",
         "default_severity": 4,
     },
