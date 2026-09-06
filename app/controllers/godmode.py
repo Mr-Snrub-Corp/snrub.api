@@ -29,6 +29,14 @@ _OFF_STATUSES: frozenset[IncidentStatus] = frozenset(
     {IncidentStatus.RESOLVED, IncidentStatus.CLOSED, IncidentStatus.FALSE_ALARM}
 )
 
+# Marks reports authored by God mode so the lever only ever touches its own reports
+# (never a genuine operator-filed incident of the same type) and they stay filterable.
+GOD_MODE_MARKER = "[god-mode]"
+
+
+def _god_mode_description(lever: GodModeLever) -> str:
+    return f"{GOD_MODE_MARKER} simulated malfunction lever: {lever.value}"
+
 
 def _get_incident_type(code: str, session: Session) -> IncidentType:
     incident_type = session.exec(select(IncidentType).where(IncidentType.code == code)).first()
@@ -38,11 +46,12 @@ def _get_incident_type(code: str, session: Session) -> IncidentType:
 
 
 def _current_report(incident_type_id: UUID, session: Session) -> IncidentReport | None:
-    """Most-recent non-terminal report for this incident type (the lever's backing report)."""
+    """Most-recent non-terminal God-mode report for this incident type (the lever's backing report)."""
     return session.exec(
         select(IncidentReport)
         .where(IncidentReport.incident_type_id == incident_type_id)
         .where(IncidentReport.status.notin_(_OFF_STATUSES))  # pylint: disable=no-member
+        .where(IncidentReport.description.startswith(GOD_MODE_MARKER))  # pylint: disable=no-member
         .order_by(IncidentReport.occurred_at.desc())
     ).first()
 
@@ -81,6 +90,7 @@ def set_lever(lever: GodModeLever, data: LeverSetRequest, user_id: UUID, session
         created = create_report(
             IncidentReportCreateRequest(
                 incident_type_id=incident_type.uid,
+                description=_god_mode_description(lever),
                 severity=data.severity or incident_type.default_severity,
                 occurred_at=datetime.utcnow(),
             ),

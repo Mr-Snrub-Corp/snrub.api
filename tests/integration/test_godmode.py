@@ -1,15 +1,37 @@
+from datetime import datetime
+from uuid import UUID
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import select
 
-from app.controllers.godmode import LEVER_CODE_MAP
+from app.controllers.godmode import GOD_MODE_MARKER, LEVER_CODE_MAP
 from app.controllers.incident_report import get_reports_for_telemetry
 from app.controllers.telemetry import get_reactor_metrics
 from app.main import app
 from app.models.godmode import GodModeLever
+from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
 
 client = TestClient(app)
 
 ACTIVE_STATUSES = ["reported", "under_review", "confirmed", "mitigation_in_progress"]
+
+
+def _genuine_report(session, incident_type_id, user):
+    """A real operator-filed report (no God-mode marker) for the same incident type."""
+    report = IncidentReport(
+        incident_type_id=incident_type_id,
+        severity=5,
+        status=IncidentStatus.REPORTED,
+        escalation_level=EscalationLevel.NONE,
+        reported_by_user_id=user.uid,
+        occurred_at=datetime.utcnow(),
+        description=None,
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
 
 
 class TestGodModeAuth:
@@ -111,9 +133,18 @@ class TestSetLever:
             headers=super_admin_auth_headers,
         )
         assert response.status_code == 200
-        assert response.json()["active"] is False
-        reports = get_reports_for_telemetry(session, ACTIVE_STATUSES, ["steam_pressure_anomaly"])
-        assert reports == []
+        result = response.json()
+        assert result["active"] is False
+        assert result["report_uid"] is None
+
+        # No God-mode report was created for this lever (scoped to the marker,
+        # so this holds regardless of any seeded/genuine reports of the same type).
+        marked = session.exec(
+            select(IncidentReport)
+            .where(IncidentReport.incident_type_id == godmode_incident_types["steam_pressure_anomaly"].uid)
+            .where(IncidentReport.description.startswith(GOD_MODE_MARKER))  # pylint: disable=no-member
+        ).all()
+        assert marked == []
 
     def test_unknown_lever_rejected(self, session, super_admin_auth_headers, godmode_incident_types):
         response = client.put(
@@ -183,3 +214,58 @@ class TestGetLevers:
         assert states["xenon"]["active"] is True
         assert states["xenon"]["status"] == "under_review"
         assert states["xenon"]["intensity"] == 0.6
+
+
+class TestGodModeMarker:
+    def test_created_report_carries_marker(self, session, super_admin_auth_headers, godmode_incident_types):
+        response = client.put(
+            "/api/godmode/levers/xenon",
+            json={"status": "confirmed"},
+            headers=super_admin_auth_headers,
+        )
+        uid = UUID(response.json()["report_uid"])
+        report = session.get(IncidentReport, uid)
+        assert report.description.startswith(GOD_MODE_MARKER)
+
+    def test_lever_ignores_genuine_report(
+        self, session, super_admin_auth_headers, godmode_incident_types, creator_user
+    ):
+        pcl_type = godmode_incident_types["primary_coolant_loss"]
+        genuine = _genuine_report(session, pcl_type.uid, creator_user)
+
+        response = client.put(
+            "/api/godmode/levers/primary_coolant_loss",
+            json={"status": "confirmed"},
+            headers=super_admin_auth_headers,
+        )
+
+        # God mode creates its own report, never adopting the genuine one.
+        assert response.json()["report_uid"] != str(genuine.uid)
+
+        session.refresh(genuine)
+        assert genuine.status == IncidentStatus.REPORTED
+        assert genuine.description is None
+
+        # Two distinct reports now exist for the type (genuine + God-mode).
+        assert len(get_reports_for_telemetry(session, ACTIVE_STATUSES, ["primary_coolant_loss"])) == 2
+
+    def test_off_leaves_genuine_report_untouched(
+        self, session, super_admin_auth_headers, godmode_incident_types, creator_user
+    ):
+        pcl_type = godmode_incident_types["primary_coolant_loss"]
+        genuine = _genuine_report(session, pcl_type.uid, creator_user)
+
+        client.put(
+            "/api/godmode/levers/primary_coolant_loss",
+            json={"status": "confirmed"},
+            headers=super_admin_auth_headers,
+        )
+        client.put(
+            "/api/godmode/levers/primary_coolant_loss",
+            json={"status": "resolved"},
+            headers=super_admin_auth_headers,
+        )
+
+        # Turning the lever off must not resolve the genuine incident.
+        session.refresh(genuine)
+        assert genuine.status == IncidentStatus.REPORTED
