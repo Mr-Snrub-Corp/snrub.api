@@ -4,13 +4,13 @@ import pytest
 
 from app.models.incident_report import IncidentStatus
 from app.services.telemetry import (
-    BASE_COOLANT_FLOW_RATE,
     BASE_CONTAINMENT_INTEGRITY,
+    BASE_COOLANT_FLOW_RATE,
     BASE_COOLANT_PRESSURE,
     BASE_CORE_TEMPERATURE,
     BASE_RADIATION_LEVEL,
-    BASE_REACTOR_POWER_OUTPUT,
     BASE_REACTIVITY,
+    BASE_REACTOR_POWER_OUTPUT,
     INCIDENT_IMPACT_MAP,
     STATUS_WEIGHT,
     apply_impact,
@@ -110,7 +110,9 @@ class TestApplyImpact:
 
         result = apply_impact(data, "primary_coolant_loss", status)
 
-        assert result["coolant_flow_rate"] == pytest.approx(BASE_COOLANT_FLOW_RATE + deltas["coolant_flow_rate"] * weight)
+        assert result["coolant_flow_rate"] == pytest.approx(
+            BASE_COOLANT_FLOW_RATE + deltas["coolant_flow_rate"] * weight
+        )
         assert result["core_temperature"] == pytest.approx(BASE_CORE_TEMPERATURE + deltas["core_temperature"] * weight)
 
     @pytest.mark.parametrize(

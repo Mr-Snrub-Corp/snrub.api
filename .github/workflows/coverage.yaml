@@ -28,3 +28,33 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_RUN_ID: ${{ github.event.workflow_run.id }}
+
+  # Same hand-off for the body-coverage comment from scripts/coverage_body.py.
+  # Separate job so a failure here cannot affect the coverage comment above.
+  body-comment:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      actions: read
+      contents: read
+    steps:
+      # Checkout first: actions/checkout cleans the workspace and would delete
+      # the downloaded artifact if it ran second.
+      - uses: actions/checkout@v4
+
+      - name: Download body coverage
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: body-coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Absent for same-repo PRs, which post directly from test.yaml.
+      - name: Post comment
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/pr-comment.sh "$(cat body-coverage-pr.txt)" body-coverage.md '<!-- body-coverage -->'

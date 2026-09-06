@@ -234,7 +234,7 @@ class TestGetIncidentReports:
 
     def test_get_all_with_offset(self, session, auth_headers, sample_type, creator_user):
         reports = []
-        for i in range(5):
+        for _ in range(5):
             report = IncidentReport(
                 incident_type_id=sample_type.uid,
                 severity=3,
@@ -257,7 +257,7 @@ class TestGetIncidentReports:
         assert len(offset_data) == len(all_data) - 2
 
     def test_get_all_with_limit(self, session, auth_headers, sample_type, creator_user):
-        for i in range(5):
+        for _ in range(5):
             report = IncidentReport(
                 incident_type_id=sample_type.uid,
                 severity=3,
@@ -375,7 +375,7 @@ class TestFilterByDateRange:
     def test_filter_date_combined_with_status(self, session, auth_headers, sample_type, creator_user):
         dates = [datetime(2025, 1, 1), datetime(2025, 2, 1), datetime(2025, 3, 1)]
         statuses = [IncidentStatus.REPORTED, IncidentStatus.CONFIRMED, IncidentStatus.REPORTED]
-        for d, s in zip(dates, statuses):
+        for d, s in zip(dates, statuses, strict=True):
             report = IncidentReport(
                 incident_type_id=sample_type.uid,
                 severity=3,
