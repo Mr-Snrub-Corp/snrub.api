@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,7 @@ from .routes.incident_report_subject import router as incident_report_subject_ro
 from .routes.incident_type import router as incident_type_router
 from .routes.telemetry import router as telemetry_router
 from .routes.user import router as user_router
+from .services.telemetry_publisher import run_publisher_loop
 
 # Configure logging
 logging.basicConfig(
@@ -23,8 +26,28 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run the 1Hz MQTT telemetry publisher for the app's lifetime (if enabled)."""
+    task: asyncio.Task | None = None
+    stop_event = asyncio.Event()
+    if settings.MQTT_ENABLED:
+        task = asyncio.create_task(run_publisher_loop(stop_event))
+        logger.info("Telemetry MQTT publisher started")
+    try:
+        yield
+    finally:
+        if task is not None:
+            stop_event.set()
+            await task
+            logger.info("Telemetry MQTT publisher stopped")
+
+
 # Disable default Swagger UI docs, we'll use Scalar instead
-app = FastAPI(docs_url=None, redoc_url=None)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # Add session middleware - required for OAuth flows - reusing the JWT secret balances security and simplicity
 app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET)
