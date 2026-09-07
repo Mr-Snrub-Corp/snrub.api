@@ -22,3 +22,5 @@ wheels/
 .coverage.*
 htmlcov/
 coverage.xml
+
+.codegraph
