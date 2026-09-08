@@ -17,10 +17,10 @@
 | app/controllers/telemetry.py                 |        7 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/user.py                      |       71 |       12 |       20 |        8 |     78.0% |44, 50-51, 60, 65, 71-\>77, 74, 79-84, 106, 122 |
 | app/core/\_\_init\_\_.py                     |        0 |        0 |        0 |        0 |    100.0% |           |
-| app/core/config.py                           |       23 |        0 |        0 |        0 |    100.0% |           |
+| app/core/config.py                           |       29 |        0 |        0 |        0 |    100.0% |           |
 | app/db/crud\_base.py                         |      107 |        0 |       10 |        0 |    100.0% |           |
 | app/db/database.py                           |        8 |        3 |        0 |        0 |     62.5% | 14, 19-20 |
-| app/main.py                                  |       37 |        2 |        0 |        0 |     94.6% |    47, 66 |
+| app/main.py                                  |       54 |       13 |        4 |        0 |     70.7% |35-46, 70, 89 |
 | app/models/\_\_init\_\_.py                   |        0 |        0 |        0 |        0 |    100.0% |           |
 | app/models/auth.py                           |       10 |        0 |        0 |        0 |    100.0% |           |
 | app/models/godmode.py                        |       13 |        0 |        0 |        0 |    100.0% |           |
@@ -48,10 +48,14 @@
 | app/security/authorization.py                |       48 |       15 |       14 |        2 |     62.9% |32, 46, 75-90 |
 | app/security/jwt.py                          |       16 |        1 |        0 |        0 |     93.8% |        12 |
 | app/security/oauth\_client.py                |        5 |        0 |        0 |        0 |    100.0% |           |
+| app/services/alarms.py                       |       21 |        0 |        8 |        0 |    100.0% |           |
 | app/services/email.py                        |       13 |        0 |        0 |        0 |    100.0% |           |
 | app/services/image\_processing.py            |       11 |        0 |        0 |        0 |    100.0% |           |
+| app/services/mqtt.py                         |       26 |        0 |        4 |        0 |    100.0% |           |
+| app/services/setpoints.py                    |        8 |        0 |        0 |        0 |    100.0% |           |
 | app/services/telemetry.py                    |       42 |        1 |       12 |        1 |     96.3% |       199 |
-| **TOTAL**                                    | **1127** |   **85** |  **158** |   **22** | **90.6%** |           |
+| app/services/telemetry\_publisher.py         |       64 |        0 |       14 |        1 |     98.7% |  102-\>87 |
+| **TOTAL**                                    | **1269** |   **96** |  **188** |   **23** | **90.6%** |           |
 
 
 ## Setup coverage badge
