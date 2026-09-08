@@ -1,0 +1,62 @@
+"""Reusable async MQTT publisher (thin wrapper over aiomqtt).
+
+Holds a single long-lived connection for a caller (the telemetry publisher
+loop now; the simulator process in Phase 3). JSON-encodes dict payloads.
+"""
+
+import json
+from logging import getLogger
+
+import aiomqtt
+
+from app.core.config import settings
+
+logger = getLogger(__name__)
+
+
+class MqttPublisher:
+    """Owns one aiomqtt connection. Call connect() before publish()."""
+
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        username: str | None = None,
+        password: str | None = None,
+    ) -> None:
+        self._host = host or settings.MQTT_HOST
+        self._port = port or settings.MQTT_PORT
+        self._username = username if username is not None else settings.MQTT_USERNAME
+        self._password = password if password is not None else settings.MQTT_PASSWORD
+        self._client: aiomqtt.Client | None = None
+
+    async def connect(self) -> None:
+        client = aiomqtt.Client(
+            hostname=self._host,
+            port=self._port,
+            username=self._username,
+            password=self._password,
+        )
+        # aiomqtt has no standalone connect(); drive the context manager manually
+        # so this object can be reused across a long-running loop.
+        await client.__aenter__()
+        self._client = client
+        logger.info("MQTT connected to %s:%s", self._host, self._port)
+
+    async def disconnect(self) -> None:
+        if self._client is not None:
+            await self._client.__aexit__(None, None, None)
+            self._client = None
+            logger.info("MQTT disconnected")
+
+    async def publish(
+        self,
+        topic: str,
+        payload: dict[str, object],
+        *,
+        retain: bool = False,
+        qos: int = 0,
+    ) -> None:
+        if self._client is None:
+            raise RuntimeError("MqttPublisher.publish called before connect()")
+        await self._client.publish(topic, payload=json.dumps(payload, default=str), qos=qos, retain=retain)
