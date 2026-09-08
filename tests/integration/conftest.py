@@ -197,10 +197,15 @@ def sample_type(session, sample_category):
 
 @pytest.fixture
 def godmode_incident_types(session, sample_category):
-    """Ensure the five God-mode lever incident types exist (idempotent get-or-create)."""
+    """Ensure the five God-mode lever incident types exist (idempotent get-or-create).
+
+    Also hides leftover God-mode reports from the shared Postgres (the running
+    API uses the same DB). Deletes are savepoint-scoped and roll back with the
+    test, so they don't wipe the live app's data.
+    """
     from sqlmodel import select
 
-    from app.controllers.godmode import LEVER_CODE_MAP
+    from app.controllers.godmode import GOD_MODE_MARKER, LEVER_CODE_MAP
 
     types = {}
     for code in LEVER_CODE_MAP.values():
@@ -218,6 +223,17 @@ def godmode_incident_types(session, sample_category):
         session.commit()
         session.refresh(t)
         types[code] = t
+
+    leftovers = session.exec(
+        select(IncidentReport)
+        .where(IncidentReport.incident_type_id.in_([t.uid for t in types.values()]))
+        .where(IncidentReport.description.startswith(GOD_MODE_MARKER))  # pylint: disable=no-member
+    ).all()
+    for report in leftovers:
+        session.delete(report)
+    if leftovers:
+        session.commit()
+
     return types
 
 
