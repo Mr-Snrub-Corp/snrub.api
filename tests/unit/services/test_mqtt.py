@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import json
 from unittest.mock import patch
 
@@ -111,6 +112,37 @@ class TestMqttPublisherConnectDisconnect:
 
         assert publisher._client is None
 
+    def test_reconnect_then_publish(self):
+        """Connect, disconnect, connect again, then publish on the new client."""
+        created: list[FakeMqttClient] = []
+
+        def factory(**kwargs):
+            client = FakeMqttClient(**kwargs)
+            created.append(client)
+            return client
+
+        publisher = MqttPublisher(host="emqx", port=1883)
+        payload = {"reactor_power": 95.0, "level": "normal"}
+
+        async def scenario():
+            with patch("app.services.mqtt.aiomqtt.Client", side_effect=factory):
+                await publisher.connect()
+                await publisher.disconnect()
+                await publisher.connect()
+                await publisher.publish("snrub/reactor/metrics", payload)
+
+        _run(scenario())
+
+        assert created[0].published == []  # old client got nothing
+        assert created[1].published == [
+            {
+                "topic": "snrub/reactor/metrics",
+                "payload": json.dumps(payload, default=str),
+                "qos": 0,
+                "retain": False,
+            }
+        ]
+
 
 class TestMqttPublisherPublish:
     def test_publish_before_connect_raises(self):
@@ -168,12 +200,26 @@ class TestMqttPublisherPublish:
         assert published["retain"] is True
         assert published["qos"] == 1
 
+    def test_publish_encodes_non_json_values_with_default_str(self):
+        """Payload values that aren't natively JSON-serializable (e.g. datetime) are converted via str()
+        thanks to default=str, instead of raising TypeError."""
+        some_datetime = datetime.now()
+        created: list[FakeMqttClient] = []
 
-@pytest.mark.skip(reason="TODO: implement later")
-def test_reconnect_then_publish():
-    """Connect, disconnect, connect again, then publish on the new client."""
+        def factory(**kwargs):
+            client = FakeMqttClient(**kwargs)
+            created.append(client)
+            return client
 
+        publisher = MqttPublisher(host="emqx", port=1883)
+        payload = {"reactor_power": 95.0, "level": "normal", "ts": some_datetime}
 
-@pytest.mark.skip(reason="TODO: implement later")
-def test_publish_encodes_non_json_values_with_default_str():
-    """Payload values that json.dumps cannot encode natively (e.g. datetime) go through default=str."""
+        async def scenario():
+            with patch("app.services.mqtt.aiomqtt.Client", side_effect=factory):
+                await publisher.connect()
+                await publisher.publish("snrub/reactor/metrics", payload)
+
+        _run(scenario())
+
+        published = created[0].published[0]
+        assert published["payload"] == json.dumps(payload, default=str)
