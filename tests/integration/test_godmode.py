@@ -7,10 +7,10 @@ from sqlmodel import select
 
 from app.controllers.godmode import GOD_MODE_MARKER, LEVER_CODE_MAP
 from app.controllers.incident_report import get_reports_for_telemetry
-from app.controllers.telemetry import get_reactor_metrics
 from app.main import app
 from app.models.godmode import GodModeLever
 from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
+from app.services.telemetry import TRACKED_INCIDENT_TYPE_CODES, compute_targets
 
 client = TestClient(app)
 
@@ -156,8 +156,15 @@ class TestSetLever:
 
 
 class TestTelemetryEffect:
-    def test_confirmed_lever_shifts_metrics(self, session, super_admin_auth_headers, godmode_incident_types):
-        baseline = get_reactor_metrics(session)
+    """Levers steer the incident-derived targets; the simulator process
+    (app/simulator.py) integrates telemetry toward them (Phase 3)."""
+
+    def _targets(self, session):
+        reports = get_reports_for_telemetry(session, ACTIVE_STATUSES, TRACKED_INCIDENT_TYPE_CODES)
+        return compute_targets(reports)
+
+    def test_confirmed_lever_shifts_targets(self, session, super_admin_auth_headers, godmode_incident_types):
+        baseline = self._targets(session)
 
         client.put(
             "/api/godmode/levers/primary_coolant_loss",
@@ -166,12 +173,12 @@ class TestTelemetryEffect:
         )
 
         # primary_coolant_loss: coolant_flow_rate -20, core_temperature +150 (weight 1.0)
-        shifted = get_reactor_metrics(session)
-        assert shifted["coolant_flow_rate"] < baseline["coolant_flow_rate"] - 10
-        assert shifted["core_temperature"] > baseline["core_temperature"] + 100
+        shifted = self._targets(session)
+        assert shifted["coolant_flow_rate"] == baseline["coolant_flow_rate"] - 20
+        assert shifted["core_temperature"] == baseline["core_temperature"] + 150
 
     def test_off_restores_baseline(self, session, super_admin_auth_headers, godmode_incident_types):
-        baseline = get_reactor_metrics(session)
+        baseline = self._targets(session)
 
         client.put(
             "/api/godmode/levers/primary_coolant_loss",
@@ -184,10 +191,10 @@ class TestTelemetryEffect:
             headers=super_admin_auth_headers,
         )
 
-        # Turning the lever off removes its report -> metrics return to baseline (modulo noise).
-        restored = get_reactor_metrics(session)
-        assert abs(restored["coolant_flow_rate"] - baseline["coolant_flow_rate"]) < 2
-        assert abs(restored["core_temperature"] - baseline["core_temperature"]) < 10
+        # Turning the lever off removes its report -> targets return to baseline
+        # exactly (targets are deterministic; noise now lives in the sensors).
+        restored = self._targets(session)
+        assert restored == baseline
 
 
 class TestGetLevers:

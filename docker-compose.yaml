@@ -9,8 +9,6 @@ services:
     env_file: .env.development
     environment:
       APP_ENV: development
-      MQTT_ENABLED: "true"
-      MQTT_HOST: emqx
     volumes:
       - ./app:/fastapi/app
       - ./tests:/fastapi/tests
@@ -26,6 +24,30 @@ services:
     depends_on:
       - db
       - emqx
+
+  simulator:
+    image: mot-fastapi:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: snrub-simulator
+    # The image ENTRYPOINT is scripts/start-dev.sh (migrations + seeds + uvicorn);
+    # the simulator waits for the api to have migrated instead.
+    entrypoint: ["python", "-m", "app.simulator"]
+    env_file: .env.development
+    environment:
+      APP_ENV: development
+      MQTT_HOST: emqx
+    volumes:
+      - ./app:/fastapi/app
+      - ./.env.development:/fastapi/.env.development
+    restart: "no"
+    depends_on:
+      - db
+      - emqx
+    deploy:
+      replicas: 1 # the tick loop must be a singleton (docs/roadmap.md Phase 3)
 
   client:
     build:

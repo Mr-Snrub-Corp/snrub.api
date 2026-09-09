@@ -27,8 +27,8 @@ class Setpoint:
     danger_high: float | None = None
 
 
-# Bands transcribed from docs/telemetry.md. Keyed by the metric names emitted by
-# services/telemetry.compute_metrics.
+# Bands transcribed from docs/telemetry.md. Keyed by the canonical metric names
+# (services/plant_model.METRICS).
 SETPOINTS: dict[str, Setpoint] = {
     # Normal 85-100, Warning 100-110, Danger >110 (fails high)
     "reactor_power": Setpoint("reactor_power", warning_high=100, danger_high=110),

@@ -38,8 +38,7 @@ class Settings(BaseSettings):
     MAIL_SUPPRESS_SEND: bool = False  # Set to True in test environment
     FRONTEND_URL: str = "http://localhost:5173"  # URL for the frontend app
 
-    # MQTT / EMQX settings. Disabled by default so tests/CI never dial a broker.
-    MQTT_ENABLED: bool = False
+    # MQTT / EMQX settings, consumed by the simulator process (app/simulator.py).
     MQTT_HOST: str = "emqx"
     MQTT_PORT: int = 1883
     MQTT_USERNAME: str | None = None

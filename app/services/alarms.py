@@ -2,7 +2,7 @@
 
 Maps current metric values to an alarm level using the shared bands in
 ``services/setpoints.py``. Pure and DB/MQTT-free so it is trivially unit
-testable; the publisher loop (services/telemetry_publisher.py) turns the
+testable; the simulator loop (app/simulator.py) turns the
 levels into retained ``snrub/alarms/{metric}`` messages.
 """
 
