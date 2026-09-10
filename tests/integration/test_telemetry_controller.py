@@ -4,11 +4,35 @@ import pytest
 from sqlmodel import select
 
 from app.controllers.incident_report import get_reports_for_telemetry
+from app.controllers.telemetry import get_reactor_metrics
 from app.models.incident_report import EscalationLevel, IncidentReport, IncidentStatus
 from app.models.incident_type import IncidentType
+from app.models.plant_state import PlantState
+from app.services.plant_model import METRICS
+from app.services.telemetry import BASE_METRICS
 
 ACTIVE_STATUSES = ["reported", "under_review", "confirmed", "mitigation_in_progress"]
 TRACKED_CODE = "primary_coolant_loss"
+
+
+def _plant_state(**measured) -> PlantState:
+    """A PlantState row: true_* at base, measured_* overridable per metric."""
+    values = {}
+    for metric in METRICS:
+        values[f"true_{metric}"] = BASE_METRICS[metric]
+        values[f"measured_{metric}"] = measured.get(metric, BASE_METRICS[metric])
+    return PlantState(**values)
+
+
+def _clear_plant_states(session):
+    """Drop any row a running simulator committed to the shared dev DB.
+
+    The session fixture's rollback restores it after the test, so the two
+    processes don't interfere.
+    """
+    for row in session.exec(select(PlantState)).all():
+        session.delete(row)
+    session.flush()
 
 
 @pytest.fixture
@@ -117,3 +141,43 @@ class TestGetReportsForTelemetry:
         )
 
         assert len(result) == 1
+
+
+class TestGetReactorMetrics:
+    def test_no_snapshot_returns_base_metrics(self, session):
+        _clear_plant_states(session)
+
+        result = get_reactor_metrics(session)
+
+        assert result == BASE_METRICS
+
+    def test_returns_measured_values_from_snapshot(self, session):
+        _clear_plant_states(session)
+        session.add(_plant_state(core_temperature=1042.0, coolant_flow_rate=48.0))
+        session.flush()
+
+        result = get_reactor_metrics(session)
+
+        assert result["core_temperature"] == 1042.0
+        assert result["coolant_flow_rate"] == 48.0
+        assert set(result.keys()) == set(METRICS)
+
+    def test_serves_measured_not_true_state(self, session):
+        # true_* at base, measured_* elevated: the reader returns what the sensors saw.
+        _clear_plant_states(session)
+        session.add(_plant_state(radiation_level=75.0))
+        session.flush()
+
+        assert get_reactor_metrics(session)["radiation_level"] == 75.0
+
+    def test_newest_updated_row_wins(self, session):
+        _clear_plant_states(session)
+        older = _plant_state(core_temperature=800.0)
+        older.updated = datetime.utcnow() - timedelta(seconds=30)
+        newer = _plant_state(core_temperature=950.0)
+        newer.updated = datetime.utcnow()
+        session.add(older)
+        session.add(newer)
+        session.flush()
+
+        assert get_reactor_metrics(session)["core_temperature"] == 950.0

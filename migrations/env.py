@@ -9,6 +9,7 @@ from app.models.incident_report import IncidentReport  # noqa: F401
 from app.models.incident_report_subject import IncidentReportSubject  # noqa: F401
 from app.models.incident_type import IncidentType  # noqa: F401
 from app.models.password_reset import PasswordReset
+from app.models.plant_state import PlantState  # noqa: F401
 
 # Add this function to handle SQLModel types properly
 def process_revision_directives(context, revision, directives):

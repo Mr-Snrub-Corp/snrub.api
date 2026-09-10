@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
+from .validators import validate_ines_severity, validate_ines_severity_optional
+
 
 class IncidentTypeBase(SQLModel, table=False):
     code: str = Field(unique=True, index=True)
@@ -28,12 +30,7 @@ class IncidentTypeCreateRequest(SQLModel):
     default_severity: int
     description: str | None = None
 
-    @field_validator("default_severity")
-    @classmethod
-    def validate_severity(cls, v: int) -> int:
-        if not 1 <= v <= 7:
-            raise ValueError("Severity must be 1-7 (INES scale)")
-        return v
+    _validate_severity = field_validator("default_severity")(validate_ines_severity)
 
 
 class IncidentTypeUpdateRequest(SQLModel):
@@ -43,12 +40,7 @@ class IncidentTypeUpdateRequest(SQLModel):
     default_severity: int | None = None
     description: str | None = None
 
-    @field_validator("default_severity")
-    @classmethod
-    def validate_severity(cls, v: int | None) -> int | None:
-        if v is not None and not 1 <= v <= 7:
-            raise ValueError("Severity must be 1-7 (INES scale)")
-        return v
+    _validate_severity = field_validator("default_severity")(validate_ines_severity_optional)
 
 
 class IncidentTypeResponse(IncidentTypeBase):

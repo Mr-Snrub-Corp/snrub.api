@@ -1,20 +1,19 @@
-from unittest.mock import Mock
-
 import pytest
 
-from app.models.incident_report import IncidentStatus
+from app.models.incident_report import IncidentReportTelemetry, IncidentStatus
 from app.services.telemetry import (
     BASE_CONTAINMENT_INTEGRITY,
     BASE_COOLANT_FLOW_RATE,
     BASE_COOLANT_PRESSURE,
     BASE_CORE_TEMPERATURE,
+    BASE_METRICS,
     BASE_RADIATION_LEVEL,
     BASE_REACTIVITY,
     BASE_REACTOR_POWER_OUTPUT,
     INCIDENT_IMPACT_MAP,
     STATUS_WEIGHT,
     apply_impact,
-    noise,
+    compute_targets,
 )
 
 
@@ -30,57 +29,41 @@ def _base_metrics() -> dict[str, float]:
     }
 
 
-def _rng_returning(*values: float) -> Mock:
-    rng = Mock()
-    rng.uniform.side_effect = list(values)
-    return rng
+def _report(code: str, status: IncidentStatus) -> IncidentReportTelemetry:
+    return IncidentReportTelemetry(incident_type_code=code, status=status)
 
 
-class TestNoise:
-    def test_non_zero_value_is_multiplied(self):
-        rng = _rng_returning(1.002)
-        result = noise({"reactor_power": 100.0}, rng=rng)
+class TestComputeTargets:
+    def test_no_reports_returns_bases(self):
+        assert compute_targets([]) == BASE_METRICS
 
-        assert result["reactor_power"] == pytest.approx(100.0 * 1.002)
-        rng.uniform.assert_called_once_with(0.995, 1.005)
+    def test_confirmed_report_applies_full_deltas(self):
+        result = compute_targets([_report("primary_coolant_loss", IncidentStatus.CONFIRMED)])
 
-    def test_zero_value_gets_half_width_additive_jitter(self):
-        rng = _rng_returning(0.002)
-        result = noise({"reactivity": 0.0}, rng=rng)
+        assert result["coolant_flow_rate"] == pytest.approx(60.0)
+        assert result["core_temperature"] == pytest.approx(850.0)
+        assert result["reactor_power"] == pytest.approx(BASE_REACTOR_POWER_OUTPUT)
 
-        assert result["reactivity"] == pytest.approx(0.002)
-        rng.uniform.assert_called_once_with(-0.0025, 0.0025)
+    def test_reports_stack(self):
+        reports = [
+            _report("primary_coolant_loss", IncidentStatus.CONFIRMED),
+            _report("primary_coolant_loss", IncidentStatus.CONFIRMED),
+        ]
 
-    def test_zero_value_additive_jitter_can_be_negative(self):
-        rng = _rng_returning(-0.002)
-        result = noise({"reactivity": 0.0}, rng=rng)
+        result = compute_targets(reports)
 
-        assert result["reactivity"] == pytest.approx(-0.002)
+        assert result["coolant_flow_rate"] == pytest.approx(40.0)
+        assert result["core_temperature"] == pytest.approx(1000.0)
 
-    def test_all_input_keys_present_in_output(self):
-        data = {"reactor_power": 95.0, "core_temperature": 700.0, "reactivity": 0.0}
+    def test_untracked_code_is_ignored(self):
+        result = compute_targets([_report("operator_asleep_at_station", IncidentStatus.CONFIRMED)])
 
-        result = noise(data, rng=_rng_returning(1.001, 1.001, 0.001))
+        assert result == BASE_METRICS
 
-        assert set(result.keys()) == set(data.keys())
+    def test_deterministic_repeat_call_is_identical(self):
+        reports = [_report("coolant_pump_failure", IncidentStatus.UNDER_REVIEW)]
 
-    def test_no_extra_keys_in_output(self):
-        data = {"reactor_power": 95.0}
-
-        result = noise(data, rng=_rng_returning(1.001))
-
-        assert list(result.keys()) == ["reactor_power"]
-
-    def test_original_dict_is_not_mutated(self):
-        data = {"reactor_power": 95.0, "reactivity": 0.0}
-        original = dict(data)
-
-        noise(data, rng=_rng_returning(1.001, 0.001))
-
-        assert data == original
-
-    def test_empty_dict_returns_empty_dict(self):
-        assert noise({}, rng=_rng_returning()) == {}
+        assert compute_targets(reports) == compute_targets(reports)
 
 
 class TestApplyImpact:

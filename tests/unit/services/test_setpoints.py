@@ -1,6 +1,6 @@
 from app.services.setpoints import SETPOINTS, Setpoint
 
-# Metrics emitted by services/telemetry.compute_metrics.
+# Canonical metric names (services/plant_model.METRICS).
 METRIC_NAMES = {
     "reactor_power",
     "core_temperature",

@@ -6,6 +6,7 @@ from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
 from .incident_report_subject import IncidentReportSubjectCreateRequest, IncidentReportSubjectResponse
+from .validators import validate_ines_severity, validate_ines_severity_optional
 
 
 class IncidentStatus(StrEnum):
@@ -51,12 +52,7 @@ class IncidentReportCreateRequest(SQLModel):
     occurred_at: datetime
     subjects: list[IncidentReportSubjectCreateRequest] = []
 
-    @field_validator("severity")
-    @classmethod
-    def validate_severity(cls, v: int) -> int:
-        if not 1 <= v <= 7:
-            raise ValueError("Severity must be 1-7 (INES scale)")
-        return v
+    _validate_severity = field_validator("severity")(validate_ines_severity)
 
 
 class IncidentReportUpdateRequest(SQLModel):
@@ -67,12 +63,7 @@ class IncidentReportUpdateRequest(SQLModel):
     incident_type_id: UUID | None = None
     subjects: list[IncidentReportSubjectCreateRequest] | None = None
 
-    @field_validator("severity")
-    @classmethod
-    def validate_severity(cls, v: int | None) -> int | None:
-        if v is not None and not 1 <= v <= 7:
-            raise ValueError("Severity must be 1-7 (INES scale)")
-        return v
+    _validate_severity = field_validator("severity")(validate_ines_severity_optional)
 
 
 class IncidentReportResponse(IncidentReportBase):

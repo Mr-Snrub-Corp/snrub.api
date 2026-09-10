@@ -1,18 +1,25 @@
 import asyncio
+import random
 from unittest.mock import patch
 
 import aiomqtt
 import pytest
 
 from app.core.config import settings
+from app.services import plant_model, sensors
 from app.services.alarms import AlarmLevel
-from app.services.telemetry_publisher import (
+from app.services.telemetry import BASE_METRICS
+from app.simulator import (
+    METRIC_TOPIC_PATHS,
+    TICK_SECONDS,
+    _advance_plant,
     _alarm_topic,
     _connect_with_retry,
+    _metric_topic,
     _metrics_topic,
     _publish_tick,
     _sleep_or_stop,
-    run_publisher_loop,
+    run_simulator,
 )
 
 
@@ -54,7 +61,7 @@ class DummySession:
         return False
 
 
-NORMAL_METRICS = {
+NORMAL_READINGS = {
     "reactor_power": 95.0,
     "core_temperature": 700.0,
     "reactivity": 0.0,
@@ -69,11 +76,22 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+async def _db_ready(stop_event):
+    return True
+
+
 class TestTopics:
     def test_metrics_topic(self):
         assert _metrics_topic() == f"{settings.MQTT_BASE_TOPIC}/reactor/metrics"
 
-    def test_alarm_topic(self):
+    def test_metric_topics_are_grouped(self):
+        assert _metric_topic("core_temperature") == f"{settings.MQTT_BASE_TOPIC}/reactor/core/temperature"
+        assert _metric_topic("coolant_flow_rate") == f"{settings.MQTT_BASE_TOPIC}/reactor/coolant/flow"
+
+    def test_topic_paths_cover_exactly_the_canonical_metrics(self):
+        assert set(METRIC_TOPIC_PATHS) == set(plant_model.METRICS)
+
+    def test_alarm_topic_stays_flat_canonical(self):
         assert _alarm_topic("core_temperature") == f"{settings.MQTT_BASE_TOPIC}/alarms/core_temperature"
 
 
@@ -106,7 +124,7 @@ class TestConnectWithRetry:
         publisher._connect_errors = [aiomqtt.MqttError("refused")]
         stop = asyncio.Event()
 
-        with patch("app.services.telemetry_publisher.RECONNECT_SECONDS", 0):
+        with patch("app.simulator.RECONNECT_SECONDS", 0):
             assert _run(_connect_with_retry(publisher, stop)) is True
 
         assert publisher.connect_calls == 2
@@ -129,76 +147,102 @@ class TestConnectWithRetry:
 
         publisher.connect = connect_and_stop  # type: ignore[method-assign]
 
-        with patch("app.services.telemetry_publisher.RECONNECT_SECONDS", 0):
+        with patch("app.simulator.RECONNECT_SECONDS", 0):
             assert _run(_connect_with_retry(publisher, stop)) is False
 
 
-class TestPublishTick:
-    def test_publishes_metrics_blob_and_changed_alarms(self):
-        publisher = FakePublisher()
-        metrics = {**NORMAL_METRICS, "core_temperature": 1050.0}
+class TestAdvancePlant:
+    def test_integrates_samples_and_persists(self):
+        persisted = {}
+
+        def fake_persist(session, state, readings, tick):
+            persisted.update(state=state, readings=readings, tick=tick)
 
         with (
-            patch("app.services.telemetry_publisher.Session", DummySession),
-            patch("app.services.telemetry_publisher.get_reactor_metrics", return_value=metrics),
+            patch("app.simulator.Session", DummySession),
+            patch("app.simulator.get_reports_for_telemetry", return_value=[]),
+            patch("app.simulator._persist", fake_persist),
         ):
-            levels = _run(_publish_tick(publisher, {}))
+            state, readings = _advance_plant(plant_model.initial_state(), dict(BASE_METRICS), 7, random.Random(3))
+
+        # No active incidents: targets are the bases, so state stays quiescent.
+        expected_state = plant_model.step(plant_model.initial_state(), dict(BASE_METRICS), TICK_SECONDS)
+        expected_readings = sensors.sample_all(expected_state, dict(BASE_METRICS), TICK_SECONDS, rng=random.Random(3))
+        assert state == expected_state
+        assert readings == expected_readings
+        assert persisted["state"] == state
+        assert persisted["readings"] == readings
+        assert persisted["tick"] == 7
+
+
+class TestPublishTick:
+    def test_publishes_blob_then_per_metric_then_changed_alarms(self):
+        publisher = FakePublisher()
+        # Measured danger while the (unseen) true value could be normal:
+        # alarms act on what operators see.
+        readings = {**NORMAL_READINGS, "core_temperature": 1050.0}
+
+        levels = _run(_publish_tick(publisher, readings, {}))
 
         assert levels["core_temperature"] == AlarmLevel.DANGER
         assert publisher.published[0]["topic"] == _metrics_topic()
-        assert publisher.published[0]["payload"] == metrics
+        assert publisher.published[0]["payload"] == readings
         assert publisher.published[0]["retain"] is False
 
-        alarm_topics = {item["topic"] for item in publisher.published[1:]}
-        assert _alarm_topic("core_temperature") in alarm_topics
-        danger = next(item for item in publisher.published if item["topic"] == _alarm_topic("core_temperature"))
+        per_metric = publisher.published[1 : 1 + len(readings)]
+        assert {item["topic"] for item in per_metric} == {_metric_topic(metric) for metric in readings}
+        temp_item = next(item for item in per_metric if item["topic"] == _metric_topic("core_temperature"))
+        assert temp_item["payload"]["metric"] == "core_temperature"
+        assert temp_item["payload"]["value"] == 1050.0
+        assert "ts" in temp_item["payload"]
+
+        alarms = publisher.published[1 + len(readings) :]
+        danger = next(item for item in alarms if item["topic"] == _alarm_topic("core_temperature"))
         assert danger["retain"] is True
         assert danger["payload"]["level"] == "danger"
         assert danger["payload"]["value"] == 1050.0
 
     def test_skips_alarms_whose_level_has_not_changed(self):
         publisher = FakePublisher()
-        last_levels = dict.fromkeys(NORMAL_METRICS, AlarmLevel.NORMAL)
+        last_levels = dict.fromkeys(NORMAL_READINGS, AlarmLevel.NORMAL)
 
-        with (
-            patch("app.services.telemetry_publisher.Session", DummySession),
-            patch("app.services.telemetry_publisher.get_reactor_metrics", return_value=NORMAL_METRICS),
-        ):
-            levels = _run(_publish_tick(publisher, last_levels))
+        levels = _run(_publish_tick(publisher, NORMAL_READINGS, last_levels))
 
         assert levels == last_levels
-        assert len(publisher.published) == 1
-        assert publisher.published[0]["topic"] == _metrics_topic()
+        assert len(publisher.published) == 1 + len(NORMAL_READINGS)  # blob + per-metric, no alarms
 
 
-class TestRunPublisherLoop:
-    def test_returns_immediately_when_stop_set_before_connect(self):
+class TestRunSimulator:
+    def test_returns_immediately_when_stop_set_before_start(self):
         stop = asyncio.Event()
         stop.set()
         fake = FakePublisher()
 
-        with patch("app.services.telemetry_publisher.MqttPublisher", return_value=fake):
-            _run(run_publisher_loop(stop))
+        with patch("app.simulator.MqttPublisher", return_value=fake):
+            _run(run_simulator(stop))
 
         assert fake.connect_calls == 0
-        assert fake.disconnect_calls == 0  # return is before the try/finally
+        assert fake.disconnect_calls == 0
 
-    def test_publishes_then_stops(self):
+    def test_ticks_then_stops(self):
         stop = asyncio.Event()
         fake = FakePublisher()
         ticks = {"n": 0}
 
-        async def one_tick(publisher, last_levels):
+        async def one_tick(publisher, readings, last_levels):
             ticks["n"] += 1
             stop.set()
-            return dict.fromkeys(NORMAL_METRICS, AlarmLevel.NORMAL)
+            return dict.fromkeys(NORMAL_READINGS, AlarmLevel.NORMAL)
 
         with (
-            patch("app.services.telemetry_publisher.MqttPublisher", return_value=fake),
-            patch("app.services.telemetry_publisher._publish_tick", side_effect=one_tick),
-            patch("app.services.telemetry_publisher.TICK_SECONDS", 0),
+            patch("app.simulator.MqttPublisher", return_value=fake),
+            patch("app.simulator._wait_for_db", _db_ready),
+            patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
+            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch("app.simulator._publish_tick", side_effect=one_tick),
+            patch("app.simulator.TICK_SECONDS", 0),
         ):
-            _run(run_publisher_loop(stop))
+            _run(run_simulator(stop))
 
         assert ticks["n"] == 1
         assert fake.connect_calls == 1
@@ -209,7 +253,7 @@ class TestRunPublisherLoop:
         fake = FakePublisher()
         ticks = {"n": 0}
 
-        async def fail_then_ok(publisher, last_levels):
+        async def fail_then_ok(publisher, readings, last_levels):
             ticks["n"] += 1
             if ticks["n"] == 1:
                 raise aiomqtt.MqttError("broker gone")
@@ -217,12 +261,15 @@ class TestRunPublisherLoop:
             return {}
 
         with (
-            patch("app.services.telemetry_publisher.MqttPublisher", return_value=fake),
-            patch("app.services.telemetry_publisher._publish_tick", side_effect=fail_then_ok),
-            patch("app.services.telemetry_publisher.TICK_SECONDS", 0),
-            patch("app.services.telemetry_publisher.RECONNECT_SECONDS", 0),
+            patch("app.simulator.MqttPublisher", return_value=fake),
+            patch("app.simulator._wait_for_db", _db_ready),
+            patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
+            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch("app.simulator._publish_tick", side_effect=fail_then_ok),
+            patch("app.simulator.TICK_SECONDS", 0),
+            patch("app.simulator.RECONNECT_SECONDS", 0),
         ):
-            _run(run_publisher_loop(stop))
+            _run(run_simulator(stop))
 
         assert ticks["n"] == 2
         assert fake.disconnect_calls >= 2  # once on error, once in finally
@@ -233,7 +280,7 @@ class TestRunPublisherLoop:
         fake = FakePublisher()
         ticks = {"n": 0}
 
-        async def boom_then_ok(publisher, last_levels):
+        async def boom_then_ok(publisher, readings, last_levels):
             ticks["n"] += 1
             if ticks["n"] == 1:
                 raise RuntimeError("compute failed")
@@ -241,11 +288,14 @@ class TestRunPublisherLoop:
             return {}
 
         with (
-            patch("app.services.telemetry_publisher.MqttPublisher", return_value=fake),
-            patch("app.services.telemetry_publisher._publish_tick", side_effect=boom_then_ok),
-            patch("app.services.telemetry_publisher.TICK_SECONDS", 0),
+            patch("app.simulator.MqttPublisher", return_value=fake),
+            patch("app.simulator._wait_for_db", _db_ready),
+            patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
+            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch("app.simulator._publish_tick", side_effect=boom_then_ok),
+            patch("app.simulator.TICK_SECONDS", 0),
         ):
-            _run(run_publisher_loop(stop))
+            _run(run_simulator(stop))
 
         assert ticks["n"] == 2
         assert fake.disconnect_calls == 1
@@ -254,22 +304,25 @@ class TestRunPublisherLoop:
         stop = asyncio.Event()
         fake = FakePublisher()
 
-        async def fail_and_stop(publisher, last_levels):
+        async def fail_and_stop(publisher, readings, last_levels):
             stop.set()
             raise aiomqtt.MqttError("broker gone")
 
         with (
-            patch("app.services.telemetry_publisher.MqttPublisher", return_value=fake),
-            patch("app.services.telemetry_publisher._publish_tick", side_effect=fail_and_stop),
-            patch("app.services.telemetry_publisher.RECONNECT_SECONDS", 0),
+            patch("app.simulator.MqttPublisher", return_value=fake),
+            patch("app.simulator._wait_for_db", _db_ready),
+            patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
+            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch("app.simulator._publish_tick", side_effect=fail_and_stop),
+            patch("app.simulator.RECONNECT_SECONDS", 0),
         ):
-            _run(run_publisher_loop(stop))
+            _run(run_simulator(stop))
 
         assert fake.disconnect_calls == 2  # error path + finally
 
 
 @pytest.mark.skip(reason="TODO: implement later")
-def test_run_publisher_loop_resyncs_cadence_when_tick_falls_behind():
+def test_run_simulator_resyncs_cadence_when_tick_falls_behind():
     """When a tick overruns TICK_SECONDS, next_tick is reset to monotonic() rather than drifting."""
 
 

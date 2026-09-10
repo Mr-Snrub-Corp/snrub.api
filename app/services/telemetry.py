@@ -1,9 +1,13 @@
-import random
 from logging import getLogger
 
-from app.models.incident_report import IncidentReportResponse, IncidentStatus
+from app.models.incident_report import IncidentReportTelemetry, IncidentStatus
 
 logger = getLogger(__name__)
+
+# Statuses that contribute to telemetry targets (non-zero STATUS_WEIGHT minus
+# CONTAINED, which the live query has always excluded). Shared by the API
+# controller and the simulator process.
+ACTIVE_INCIDENT_STATUSES = ["reported", "under_review", "confirmed", "mitigation_in_progress"]
 
 # frozenset() accepts any iterable, including a plain parenthesised sequenc
 TRACKED_INCIDENT_TYPE_CODES: frozenset[str] = frozenset(
@@ -56,6 +60,18 @@ BASE_RADIATION_LEVEL = 2  # 0 – 500
 # UI: → Ring progress (donut chart)
 # incident_types  containment_integrity_compromised, structural_integrity_concern
 BASE_CONTAINMENT_INTEGRITY = 95  # Range: 0 – 100%
+
+# Quiescent plant, keyed by canonical metric name. The plant model integrates
+# toward incident-derived targets built from these bases.
+BASE_METRICS: dict[str, float] = {
+    "reactor_power": BASE_REACTOR_POWER_OUTPUT,
+    "core_temperature": BASE_CORE_TEMPERATURE,
+    "reactivity": BASE_REACTIVITY,
+    "coolant_flow_rate": BASE_COOLANT_FLOW_RATE,
+    "coolant_pressure": BASE_COOLANT_PRESSURE,
+    "radiation_level": BASE_RADIATION_LEVEL,
+    "containment_integrity": BASE_CONTAINMENT_INTEGRITY,
+}
 
 
 STATUS_WEIGHT: dict[IncidentStatus, float] = {
@@ -144,26 +160,6 @@ INCIDENT_IMPACT_MAP = {
 }
 
 
-MULTIPLICATIVE_JITTER = 0.005  # ±0.5%
-ADDITIVE_JITTER = 0.0025  # half of multiplicative band, applied additively at zero
-
-
-def noise(
-    data: dict[str, float],
-    *,
-    rng: random.Random | None = None,
-) -> dict[str, float]:
-    """Apply random noise metrics"""
-    source = rng or random
-    result = dict(data)
-    for key, value in result.items():
-        if value == 0:
-            result[key] = value + source.uniform(-ADDITIVE_JITTER, ADDITIVE_JITTER)
-        else:
-            result[key] = value * source.uniform(1 - MULTIPLICATIVE_JITTER, 1 + MULTIPLICATIVE_JITTER)
-    return result
-
-
 def apply_impact(
     data: dict[str, float],
     incident_type_code: str,
@@ -181,24 +177,14 @@ def apply_impact(
     return result
 
 
-def compute_metrics(recent_reports: list[IncidentReportResponse]):
-    logger.info("compute_metrics: %d recent reports", len(recent_reports))
-    metrics = {
-        "reactor_power": BASE_REACTOR_POWER_OUTPUT,
-        "core_temperature": BASE_CORE_TEMPERATURE,
-        "reactivity": BASE_REACTIVITY,
-        "coolant_flow_rate": BASE_COOLANT_FLOW_RATE,
-        "coolant_pressure": BASE_COOLANT_PRESSURE,
-        "radiation_level": BASE_RADIATION_LEVEL,
-        "containment_integrity": BASE_CONTAINMENT_INTEGRITY,
-    }
+def compute_targets(recent_reports: list[IncidentReportTelemetry]) -> dict[str, float]:
+    """Status-weighted incident deltas applied to base metrics.
 
+    Returns the targets the plant model integrates toward — deterministic,
+    no noise (measurement error belongs to the sensor layer).
+    """
+    logger.debug("compute_targets: %d recent reports", len(recent_reports))
+    targets = dict(BASE_METRICS)
     for report in recent_reports:
-        logger.info("  status=%s code=%s", report.status, report.incident_type_code)
-        if report.incident_type_code not in INCIDENT_IMPACT_MAP:
-            continue
-        metrics = apply_impact(metrics, report.incident_type_code, report.status)
-
-    # Implement gradual drift
-    metrics = noise(metrics)
-    return metrics
+        targets = apply_impact(targets, report.incident_type_code, report.status)
+    return targets
