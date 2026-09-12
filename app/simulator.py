@@ -28,7 +28,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.db.database import engine
 from app.models.plant_state import PlantState, measured_dict, true_state_dict
-from app.services import plant_model, sensors
+from app.services import incident_emitter, plant_model, sensors
 from app.services.alarms import AlarmLevel, alarm_payload, evaluate
 from app.services.mqtt import MqttPublisher
 
@@ -188,17 +188,19 @@ def _advance_plant(
     tick: int,
     rng: random.Random,
     actuator_state: dict[str, float],
+    excursion_streaks: dict[str, int],
 ) -> tuple[dict[str, float], dict[str, float]]:
     """Integrate one tick from the current actuator setpoints and persist the snapshot.
 
     Phase 4 inversion: actuators drive true state (was: active incidents).
-    Incidents are now emitted from excursions, not fed back as targets.
+    Incidents are emitted from DANGER excursions after the snapshot is saved.
     """
     with Session(engine) as session:
         targets = plant_model.targets_from_actuators(actuator_state)
         state = plant_model.step(state, targets, TICK_SECONDS)
         readings = sensors.sample_all(state, prev_readings, TICK_SECONDS, rng=rng)
         _persist(session, state, readings, tick)
+        incident_emitter.emit(state, excursion_streaks, session)
     return state, readings
 
 
@@ -244,12 +246,15 @@ async def run_simulator(stop_event: asyncio.Event, rng: random.Random | None = N
     consumer = await _start_actuator_consumer(publisher, actuator_state, stop_event)
 
     last_levels: dict[str, AlarmLevel] = {}
+    excursion_streaks: dict[str, int] = {}
     next_tick = time.monotonic()
     try:
         while not stop_event.is_set():
             try:
                 tick += 1
-                state, prev_readings = _advance_plant(state, prev_readings, tick, rng, actuator_state)
+                state, prev_readings = _advance_plant(
+                    state, prev_readings, tick, rng, actuator_state, excursion_streaks
+                )
                 last_levels = await _publish_tick(publisher, prev_readings, last_levels)
             except aiomqtt.MqttError as exc:
                 logger.warning("MQTT publish failed: %s; reconnecting", exc)

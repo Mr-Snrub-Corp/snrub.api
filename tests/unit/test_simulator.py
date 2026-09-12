@@ -187,9 +187,15 @@ class TestAdvancePlant:
         with (
             patch("app.simulator.Session", DummySession),
             patch("app.simulator._persist", fake_persist),
+            patch("app.simulator.incident_emitter.emit"),
         ):
             state, readings = _advance_plant(
-                plant_model.initial_state(), dict(BASE_METRICS), 7, random.Random(3), actuator_state
+                plant_model.initial_state(),
+                dict(BASE_METRICS),
+                7,
+                random.Random(3),
+                actuator_state,
+                {},
             )
 
         # Nominal actuators map to the base targets, so state stays quiescent.
@@ -209,9 +215,15 @@ class TestAdvancePlant:
         with (
             patch("app.simulator.Session", DummySession),
             patch("app.simulator._persist", lambda *a, **k: None),
+            patch("app.simulator.incident_emitter.emit"),
         ):
             state, _ = _advance_plant(
-                plant_model.initial_state(), dict(BASE_METRICS), 1, random.Random(3), actuator_state
+                plant_model.initial_state(),
+                dict(BASE_METRICS),
+                1,
+                random.Random(3),
+                actuator_state,
+                {},
             )
 
         expected_targets = plant_model.targets_from_actuators(actuator_state)
@@ -326,7 +338,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng, actuators: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=one_tick),
             patch("app.simulator.TICK_SECONDS", 0),
         ):
@@ -352,7 +367,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng, actuators: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=fail_then_ok),
             patch("app.simulator.TICK_SECONDS", 0),
             patch("app.simulator.RECONNECT_SECONDS", 0),
@@ -379,7 +397,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng, actuators: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=boom_then_ok),
             patch("app.simulator.TICK_SECONDS", 0),
         ):
@@ -400,7 +421,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng, actuators: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=fail_and_stop),
             patch("app.simulator.RECONNECT_SECONDS", 0),
         ):
