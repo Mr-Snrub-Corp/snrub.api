@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from .routes.incident_report_subject import router as incident_report_subject_ro
 from .routes.incident_type import router as incident_type_router
 from .routes.telemetry import router as telemetry_router
 from .routes.user import router as user_router
+from .services.mqtt import MqttPublisher
 
 # Configure logging
 logging.basicConfig(
@@ -25,8 +27,28 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Own one MQTT publisher for the API's lifetime (super_admin actuator route).
+
+    A down broker must not stop the API booting: log and carry on with an
+    unconnected publisher; get_mqtt_publisher then returns 503 until it
+    reconnects. Publishing control from the API keeps broker creds out of the
+    browser (docs/roadmap.md Phase 4).
+    """
+    publisher = MqttPublisher()
+    try:
+        await publisher.connect()
+    except Exception:
+        logger.exception("MQTT connect failed at startup; actuator publishing disabled until reconnect")
+    app.state.mqtt_publisher = publisher
+    yield
+    await publisher.disconnect()
+
+
 # Disable default Swagger UI docs, we'll use Scalar instead
-app = FastAPI(docs_url=None, redoc_url=None)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # Add session middleware - required for OAuth flows - reusing the JWT secret balances security and simplicity
 app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET)

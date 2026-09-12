@@ -1,13 +1,15 @@
 """Reusable async MQTT publisher (thin wrapper over aiomqtt).
 
 Holds a single long-lived connection for a caller (the telemetry publisher
-loop now; the simulator process in Phase 3). JSON-encodes dict payloads.
+loop now; the simulator process in Phase 3; the API's actuator route in
+Phase 4). JSON-encodes dict payloads.
 """
 
 import json
 from logging import getLogger
 
 import aiomqtt
+from fastapi import HTTPException, Request
 
 from app.core.config import settings
 
@@ -29,6 +31,10 @@ class MqttPublisher:
         self._username = username if username is not None else settings.MQTT_USERNAME
         self._password = password if password is not None else settings.MQTT_PASSWORD
         self._client: aiomqtt.Client | None = None
+
+    @property
+    def connected(self) -> bool:
+        return self._client is not None
 
     async def connect(self) -> None:
         client = aiomqtt.Client(
@@ -60,3 +66,15 @@ class MqttPublisher:
         if self._client is None:
             raise RuntimeError("MqttPublisher.publish called before connect()")
         await self._client.publish(topic, payload=json.dumps(payload, default=str), qos=qos, retain=retain)
+
+
+def get_mqtt_publisher(request: Request) -> MqttPublisher:
+    """FastAPI dependency: the app-scoped publisher connected in main.lifespan.
+
+    503 if the broker was unreachable at startup / dropped — the caller
+    (super_admin actuator route) can't publish without a live connection.
+    """
+    publisher: MqttPublisher | None = getattr(request.app.state, "mqtt_publisher", None)
+    if publisher is None or not publisher.connected:
+        raise HTTPException(status_code=503, detail="MQTT broker unavailable")
+    return publisher
