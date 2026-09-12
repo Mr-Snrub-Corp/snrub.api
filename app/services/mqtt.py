@@ -1,11 +1,14 @@
-"""Reusable async MQTT publisher (thin wrapper over aiomqtt).
+"""Reusable async MQTT client (thin wrapper over aiomqtt).
 
 Holds a single long-lived connection for a caller (the telemetry publisher
 loop now; the simulator process in Phase 3; the API's actuator route in
-Phase 4). JSON-encodes dict payloads.
+Phase 4). JSON-encodes dict payloads. The single client both publishes and
+subscribes (the simulator subscribes to the actuator tree while it publishes
+telemetry).
 """
 
 import json
+from collections.abc import AsyncGenerator
 from logging import getLogger
 
 import aiomqtt
@@ -17,7 +20,7 @@ logger = getLogger(__name__)
 
 
 class MqttPublisher:
-    """Owns one aiomqtt connection. Call connect() before publish()."""
+    """Owns one aiomqtt connection. Call connect() before publish()/subscribe()."""
 
     def __init__(
         self,
@@ -66,6 +69,18 @@ class MqttPublisher:
         if self._client is None:
             raise RuntimeError("MqttPublisher.publish called before connect()")
         await self._client.publish(topic, payload=json.dumps(payload, default=str), qos=qos, retain=retain)
+
+    async def subscribe(self, topic: str, *, qos: int = 0) -> None:
+        if self._client is None:
+            raise RuntimeError("MqttPublisher.subscribe called before connect()")
+        await self._client.subscribe(topic, qos=qos)
+
+    @property
+    def messages(self) -> AsyncGenerator[aiomqtt.Message]:
+        """Async iterator of incoming messages on subscribed topics."""
+        if self._client is None:
+            raise RuntimeError("MqttPublisher.messages accessed before connect()")
+        return self._client.messages
 
 
 def get_mqtt_publisher(request: Request) -> MqttPublisher:

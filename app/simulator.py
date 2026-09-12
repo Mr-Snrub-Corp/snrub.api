@@ -1,8 +1,9 @@
 """Singleton plant simulator process (Phase 3, docs/roadmap.md).
 
 Run with ``python -m app.simulator`` (own compose service, same image as the
-API). Each 1Hz tick: derive targets from active incidents, integrate the true
-plant state (services/plant_model.py), sample sensors (services/sensors.py),
+API). Each 1Hz tick: derive targets from the current actuator setpoints
+(Phase 4; super_admin publishes them, this process subscribes), integrate the
+true plant state (services/plant_model.py), sample sensors (services/sensors.py),
 persist the snapshot to the single plant_states row, then publish measured
 telemetry — full blob to ``snrub/reactor/metrics``, per-metric readings to
 ``snrub/reactor/{group}/{metric}`` and retained ``snrub/alarms/{metric}`` on
@@ -11,6 +12,8 @@ request handlers stay stateless and read the latest snapshot.
 """
 
 import asyncio
+import contextlib
+import json
 import logging
 import random
 import signal
@@ -22,14 +25,12 @@ import aiomqtt
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlmodel import Session, select
 
-from app.controllers.incident_report import get_reports_for_telemetry
 from app.core.config import settings
 from app.db.database import engine
 from app.models.plant_state import PlantState, measured_dict, true_state_dict
 from app.services import plant_model, sensors
 from app.services.alarms import AlarmLevel, alarm_payload, evaluate
 from app.services.mqtt import MqttPublisher
-from app.services.telemetry import ACTIVE_INCIDENT_STATUSES, TRACKED_INCIDENT_TYPE_CODES, compute_targets
 
 logger = getLogger(__name__)
 
@@ -61,6 +62,55 @@ def _metric_topic(metric: str) -> str:
 
 def _alarm_topic(metric: str) -> str:
     return f"{settings.MQTT_BASE_TOPIC}/alarms/{metric}"
+
+
+def _actuators_topic() -> str:
+    """Wildcard the API publishes actuator setpoints under (retained, one per actuator)."""
+    return f"{settings.MQTT_BASE_TOPIC}/plant/actuators/#"
+
+
+def _apply_actuator_message(actuator_state: dict[str, float], payload: bytes | str) -> None:
+    """Fold one actuator setpoint message into actuator_state.
+
+    Payload shape is set by controllers.actuators.set_actuator
+    ({"actuator": name, "value": float, ...}). Malformed messages and unknown
+    actuators are logged and ignored so a bad publish can't crash the tick loop.
+    """
+    try:
+        data = json.loads(payload)
+        name = data["actuator"]
+        value = float(data["value"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        logger.warning("ignoring malformed actuator message: %r", payload)
+        return
+    if name not in plant_model.ACTUATOR_NOMINAL:
+        logger.warning("ignoring unknown actuator %r", name)
+        return
+    actuator_state[name] = value
+
+
+async def _consume_actuators(
+    publisher: MqttPublisher, actuator_state: dict[str, float], stop_event: asyncio.Event
+) -> None:
+    """Background task: fold retained/live actuator messages into actuator_state."""
+    async for message in publisher.messages:
+        _apply_actuator_message(actuator_state, message.payload)
+        if stop_event.is_set():
+            return
+
+
+async def _start_actuator_consumer(
+    publisher: MqttPublisher, actuator_state: dict[str, float], stop_event: asyncio.Event
+) -> asyncio.Task:
+    """Subscribe to the actuator tree and spawn the consumer task."""
+    await publisher.subscribe(_actuators_topic())
+    return asyncio.create_task(_consume_actuators(publisher, actuator_state, stop_event))
+
+
+async def _cancel_task(task: asyncio.Task) -> None:
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 async def _sleep_or_stop(stop_event: asyncio.Event, timeout: float) -> None:
@@ -137,11 +187,15 @@ def _advance_plant(
     prev_readings: dict[str, float],
     tick: int,
     rng: random.Random,
+    actuator_state: dict[str, float],
 ) -> tuple[dict[str, float], dict[str, float]]:
-    """Integrate one tick from active incidents and persist the snapshot."""
+    """Integrate one tick from the current actuator setpoints and persist the snapshot.
+
+    Phase 4 inversion: actuators drive true state (was: active incidents).
+    Incidents are now emitted from excursions, not fed back as targets.
+    """
     with Session(engine) as session:
-        reports = get_reports_for_telemetry(session, ACTIVE_INCIDENT_STATUSES, TRACKED_INCIDENT_TYPE_CODES)
-        targets = compute_targets(reports)
+        targets = plant_model.targets_from_actuators(actuator_state)
         state = plant_model.step(state, targets, TICK_SECONDS)
         readings = sensors.sample_all(state, prev_readings, TICK_SECONDS, rng=rng)
         _persist(session, state, readings, tick)
@@ -179,9 +233,15 @@ async def run_simulator(stop_event: asyncio.Event, rng: random.Random | None = N
         return
     state, prev_readings, tick = _load_or_init_state()
 
+    # Seeded from nominals so an empty broker (no retained setpoints yet) yields
+    # exactly the base plant. The consumer folds in retained + live setpoints.
+    actuator_state: dict[str, float] = dict(plant_model.ACTUATOR_NOMINAL)
+
     publisher = MqttPublisher()
     if not await _connect_with_retry(publisher, stop_event):
         return
+
+    consumer = await _start_actuator_consumer(publisher, actuator_state, stop_event)
 
     last_levels: dict[str, AlarmLevel] = {}
     next_tick = time.monotonic()
@@ -189,14 +249,16 @@ async def run_simulator(stop_event: asyncio.Event, rng: random.Random | None = N
         while not stop_event.is_set():
             try:
                 tick += 1
-                state, prev_readings = _advance_plant(state, prev_readings, tick, rng)
+                state, prev_readings = _advance_plant(state, prev_readings, tick, rng, actuator_state)
                 last_levels = await _publish_tick(publisher, prev_readings, last_levels)
             except aiomqtt.MqttError as exc:
                 logger.warning("MQTT publish failed: %s; reconnecting", exc)
+                await _cancel_task(consumer)
                 await publisher.disconnect()
                 last_levels = {}  # force alarm re-publish after reconnect
                 if not await _connect_with_retry(publisher, stop_event):
                     return
+                consumer = await _start_actuator_consumer(publisher, actuator_state, stop_event)
                 continue
             except Exception:
                 logger.exception("simulator tick failed")
@@ -206,6 +268,7 @@ async def run_simulator(stop_event: asyncio.Event, rng: random.Random | None = N
             if time.monotonic() - next_tick > TICK_SECONDS:
                 next_tick = time.monotonic()  # fell behind; resync cadence
     finally:
+        await _cancel_task(consumer)
         await publisher.disconnect()
 
 

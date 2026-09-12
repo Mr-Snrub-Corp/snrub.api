@@ -150,6 +150,22 @@ class TestActuatorPublish:
         assert payload["actuator"] == "xenon_injection"
         assert payload["kind"] == "fault"
 
+    def test_steam_valve_publishes_to_its_own_topic(self, session, super_admin_auth_headers, fake_publisher):
+        # Regression: the enum member/value must be steam_valve (not steam_value), or the
+        # topic and plant_model.ACTUATOR_NOMINAL lookup silently disagree.
+        response = client.put(
+            "/api/godmode/actuators/steam_valve",
+            json={"value": 30},
+            headers=super_admin_auth_headers,
+        )
+        assert response.status_code == 200
+
+        msg = fake_publisher.published[0]
+        assert msg["topic"] == _topic("steam_valve")
+        payload = msg["payload"]
+        assert payload["actuator"] == "steam_valve"
+        assert payload["kind"] == "command"
+
     def test_response_echoes_actuator_state(self, session, super_admin_auth_headers, fake_publisher):
         response = client.put(
             "/api/godmode/actuators/rod_position",
@@ -161,3 +177,29 @@ class TestActuatorPublish:
         assert body["actuator"] == "rod_position"
         assert body["value"] == 75
         assert body["kind"] == "command"
+
+
+class TestActuatorList:
+    """GET /godmode/actuators hydrates the client with nominal positions + kinds."""
+
+    def test_list_actuators_super_admin_returns_all_five(self, session, super_admin_auth_headers):
+        response = client.get("/api/godmode/actuators", headers=super_admin_auth_headers)
+        assert response.status_code == 200
+
+        body = response.json()
+        by_name = {a["actuator"]: a for a in body}
+        assert set(by_name) == {"rod_position", "pump_speed", "steam_valve", "leak_rate", "xenon_injection"}
+        # Commands default to their operating point; faults default to 0 (off).
+        assert by_name["pump_speed"] == {"actuator": "pump_speed", "value": 80, "kind": "command"}
+        assert by_name["steam_valve"]["value"] == 50
+        assert by_name["leak_rate"] == {"actuator": "leak_rate", "value": 0, "kind": "fault"}
+
+    @pytest.mark.parametrize("headers_fixture", ["admin_auth_headers", "creator_auth_headers", "auth_headers"])
+    def test_list_actuators_non_super_admin_forbidden(self, session, request, headers_fixture):
+        headers = request.getfixturevalue(headers_fixture)
+        response = client.get("/api/godmode/actuators", headers=headers)
+        assert response.status_code == 403
+
+    def test_list_actuators_unauthenticated(self, session):
+        response = client.get("/api/godmode/actuators")
+        assert response.status_code in (401, 403)

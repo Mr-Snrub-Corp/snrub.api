@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     MQTT_PASSWORD: str | None = None
     MQTT_BASE_TOPIC: str = "snrub"
 
+    # Identity that owns auto-emitted incident reports (Phase 4 incident_emitter).
+    # Seeded by an Alembic data migration; the emitter looks it up by email.
+    SYSTEM_USER_EMAIL: str = "system@snrub.local"
+
     model_config = SettingsConfigDict(
         env_file=f".env.{os.getenv('APP_ENV', 'development')}",
         env_file_encoding="utf-8",
