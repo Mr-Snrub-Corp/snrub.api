@@ -46,6 +46,11 @@ EXCURSION_CODE_MAP: dict[tuple[str, str], str] = {
 
 
 def _danger_direction(value: float, setpoint: Setpoint) -> str | None:
+    """Which DANGER rail the value crossed, or None if it is inside both rails.
+
+    ``high`` = at or above ``danger_high``; ``low`` = at or below ``danger_low``.
+    Used as the second key in EXCURSION_CODE_MAP.
+    """
     if setpoint.danger_high is not None and value >= setpoint.danger_high:
         return "high"
     if setpoint.danger_low is not None and value <= setpoint.danger_low:
@@ -76,8 +81,18 @@ def current_excursions(state: dict[str, float]) -> dict[str, str]:
 def update_streaks(streaks: dict[str, int], excursions: dict[str, str]) -> tuple[dict[str, int], list[str]]:
     """Count consecutive DANGER ticks per metric.
 
-    Recovered metrics drop out. A code is ready every tick at/after the
-    debounce threshold — ``file_auto_reports`` dedups so we still file once.
+    Recovered metrics drop out. A code is ready every tick at or after
+    DEBOUNCE_TICKS — ``file_auto_reports`` dedups so we still file once.
+
+    Returns:
+        ``(next_streaks, ready_codes)``. After two DANGER ticks on coolant
+        flow (DEBOUNCE_TICKS is 3)::
+
+            ({"coolant_flow_rate": 2}, [])
+
+        On the third tick::
+
+            ({"coolant_flow_rate": 3}, ["coolant_flow_reduction"])
     """
     next_streaks: dict[str, int] = {}
     ready: list[str] = []

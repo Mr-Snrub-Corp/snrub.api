@@ -114,12 +114,24 @@ def _effective_targets(state: dict[str, float], targets: dict[str, float]) -> di
     return eff
 
 
-def step(state: dict[str, float], targets: dict[str, float], dt: float) -> dict[str, float]:
-    """Advance true state by dt seconds toward the targets. Inputs not mutated."""
+def step(state: dict[str, float], targets: dict[str, float], elapsed_seconds: float) -> dict[str, float]:
+    """Advance true plant state toward ``targets`` by ``elapsed_seconds``.
+
+    Inputs are not mutated. Each metric eases a fraction of the remaining gap
+    (larger ``elapsed_seconds`` → closer to the target). The simulator passes
+    1.0 (one tick).
+
+    Returns the new true state, same keys as METRICS, e.g. after one second
+    at the base targets::
+
+        {"reactor_power": 95.0, "core_temperature": 700.0, "reactivity": 0.0,
+         "coolant_flow_rate": 80.0, "coolant_pressure": 130.0,
+         "radiation_level": 2.0, "containment_integrity": 95.0}
+    """
     eff = _effective_targets(state, targets)
     result: dict[str, float] = {}
     for metric in METRICS:
-        alpha = 1.0 - exp(-dt / TAUS[metric])
+        alpha = 1.0 - exp(-elapsed_seconds / TAUS[metric])
         value = state[metric] + (eff[metric] - state[metric]) * alpha
         result[metric] = _clamp(value, *PHYSICAL_RANGES[metric])
     return result

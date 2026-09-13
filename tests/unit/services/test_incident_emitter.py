@@ -6,7 +6,14 @@ feeds it: sustained DANGER becomes ready, WARNING/normal never do, recovery
 resets the streak, and ready stays ready until the excursion ends.
 """
 
-from app.services.incident_emitter import DEBOUNCE_TICKS, current_excursions, update_streaks
+from app.services.incident_emitter import (
+    DEBOUNCE_TICKS,
+    EXCURSION_CODE_MAP,
+    _danger_direction,
+    current_excursions,
+    update_streaks,
+)
+from app.services.setpoints import SETPOINTS
 from app.services.telemetry import BASE_METRICS
 
 
@@ -35,6 +42,26 @@ class TestCurrentExcursions:
 
     def test_unknown_metric_is_skipped(self):
         assert current_excursions(_state(not_a_metric=999)) == {}
+
+    def test_unmapped_danger_direction_is_skipped(self, monkeypatch):
+        """DANGER with no EXCURSION_CODE_MAP entry must not invent a code."""
+        monkeypatch.delitem(EXCURSION_CODE_MAP, ("core_temperature", "high"))
+        assert current_excursions(_state(core_temperature=1000)) == {}
+
+    def test_danger_without_a_direction_is_skipped(self, monkeypatch):
+        monkeypatch.setattr("app.services.incident_emitter._danger_direction", lambda *_a, **_k: None)
+        assert current_excursions(_state(core_temperature=1000)) == {}
+
+
+class TestDangerDirection:
+    def test_high_rail(self):
+        assert _danger_direction(1000, SETPOINTS["core_temperature"]) == "high"
+
+    def test_low_rail(self):
+        assert _danger_direction(20, SETPOINTS["coolant_flow_rate"]) == "low"
+
+    def test_inside_bands_is_none(self):
+        assert _danger_direction(700, SETPOINTS["core_temperature"]) is None
 
 
 class TestUpdateStreaks:

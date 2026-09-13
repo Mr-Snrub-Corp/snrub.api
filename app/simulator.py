@@ -170,6 +170,10 @@ def _load_or_init_state() -> tuple[dict[str, float], dict[str, float], int]:
 
 
 def _persist(session: Session, state: dict[str, float], readings: dict[str, float], tick: int) -> None:
+    """Write this tick's true state and sensor readings to the plant_states row.
+
+    Updates the latest row, or inserts one if the table was emptied externally.
+    """
     row = session.exec(select(PlantState).order_by(PlantState.updated.desc())).first()
     if row is None:  # self-heal if the row was deleted externally
         row = PlantState(
