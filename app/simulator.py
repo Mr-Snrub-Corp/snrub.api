@@ -73,8 +73,9 @@ def _apply_actuator_message(actuator_state: dict[str, float], payload: bytes | s
     """Fold one actuator setpoint message into actuator_state.
 
     Payload shape is set by controllers.actuators.set_actuator
-    ({"actuator": name, "value": float, ...}). Malformed messages and unknown
-    actuators are logged and ignored so a bad publish can't crash the tick loop.
+    ({"actuator": name, "value": float, ...}). Values are clamped to
+    ACTUATOR_RANGES (0–100). Malformed messages and unknown actuators are
+    logged and ignored so a bad publish can't crash the tick loop.
     """
     try:
         data = json.loads(payload)
@@ -86,7 +87,11 @@ def _apply_actuator_message(actuator_state: dict[str, float], payload: bytes | s
     if name not in plant_model.ACTUATOR_NOMINAL:
         logger.warning("ignoring unknown actuator %r", name)
         return
-    actuator_state[name] = value
+    low, high = plant_model.ACTUATOR_RANGES[name]
+    clamped = max(low, min(high, value))
+    if clamped != value:
+        logger.warning("clamping actuator %s from %s to %s", name, value, clamped)
+    actuator_state[name] = clamped
 
 
 async def _consume_actuators(

@@ -16,6 +16,7 @@ from app.controllers.incident_report import create_report
 from app.core.config import settings
 from app.models.incident_report import IncidentReport, IncidentReportCreateRequest, IncidentStatus
 from app.models.incident_type import IncidentType
+from app.models.password_reset import PasswordReset  # noqa: F401 — needed to resolve User.password_resets
 from app.models.user import User
 from app.services.alarms import AlarmLevel, classify
 from app.services.setpoints import SETPOINTS, Setpoint

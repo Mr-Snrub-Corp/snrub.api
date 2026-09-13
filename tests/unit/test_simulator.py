@@ -247,6 +247,13 @@ class TestActuatorConsumption:
         _apply_actuator_message(actuator_state, json.dumps({"actuator": "leak_rate", "value": 55}).encode())
         assert actuator_state["leak_rate"] == 55.0
 
+    def test_apply_message_clamps_out_of_range_value(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "leak_rate", "value": 999}))
+        assert actuator_state["leak_rate"] == 100.0
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "pump_speed", "value": -5}))
+        assert actuator_state["pump_speed"] == 0.0
+
     def test_apply_message_ignores_unknown_actuator(self):
         actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
         _apply_actuator_message(actuator_state, json.dumps({"actuator": "not_real", "value": 10}))

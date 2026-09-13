@@ -6,7 +6,8 @@ Create Date: 2026-09-12 00:00:00.000000
 
 The Phase 4 incident_emitter files auto-incidents under this identity, looked
 up by settings.SYSTEM_USER_EMAIL (no hardcoded uid). Idempotent: skips if the
-email already exists. The password is a bcrypt hash of a random secret, so the
+email already exists. Role is CREATOR — enough to own reported_by_user_id,
+not god-mode. The password is a bcrypt hash of a random secret, so the
 account can never be logged into (nobody knows the plaintext) while password
 verification still runs without error.
 """
@@ -36,7 +37,10 @@ def upgrade() -> None:
     bind = op.get_bind()
     email = settings.SYSTEM_USER_EMAIL
 
-    already_seeded = bind.execute(sa.text("SELECT 1 FROM users WHERE email = :email"), {"email": email}).first()
+    already_seeded = bind.execute(
+        sa.text("SELECT 1 FROM users WHERE email IN (:current, :legacy)"),
+        {"current": email, "legacy": "system@snrub.local"},
+    ).first()
     if already_seeded:
         return
 
@@ -51,7 +55,7 @@ def upgrade() -> None:
             "uid": str(uuid.uuid4()),
             "email": email,
             "name": "System",
-            "role": "SUPER_ADMIN",
+            "role": "CREATOR",
             "status": "ACTIVE",
             "password": pwd_context.hash(secrets.token_urlsafe(32)),
             "created": now,
@@ -62,4 +66,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    bind.execute(sa.text("DELETE FROM users WHERE email = :email"), {"email": settings.SYSTEM_USER_EMAIL})
+    bind.execute(
+        sa.text("DELETE FROM users WHERE email IN (:current, :legacy)"),
+        {"current": settings.SYSTEM_USER_EMAIL, "legacy": "system@snrub.local"},
+    )
