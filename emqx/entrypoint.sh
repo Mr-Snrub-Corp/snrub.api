@@ -20,4 +20,13 @@ EOF
 export EMQX_DASHBOARD__DEFAULT_PASSWORD="$dashboard_pass"
 export EMQX_AUTHENTICATION__1__BOOTSTRAP_FILE="$bootstrap"
 
+# The API .env is shared via env_file; EMQX's start script treats DEBUG as an
+# integer (`[ "$DEBUG" -gt 0 ]`) and dies if it is "true".
+export DEBUG=0
+unset ENV
+
+# Compose `entrypoint:` clears the image CMD; default to foreground if none given.
+if [ "$#" -eq 0 ]; then
+  set -- /opt/emqx/bin/emqx foreground
+fi
 exec /usr/bin/docker-entrypoint.sh "$@"

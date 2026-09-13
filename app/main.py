@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -27,21 +28,39 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+MQTT_CONNECT_ATTEMPTS = 5
+MQTT_CONNECT_INTERVAL_SECONDS = 2.0
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Own one MQTT publisher for the API's lifetime (super_admin actuator route).
 
-    A down broker must not stop the API booting: log and carry on with an
-    unconnected publisher; get_mqtt_publisher then returns 503 until it
-    reconnects. Publishing control from the API keeps broker creds out of the
-    browser (docs/roadmap.md Phase 4).
+    A down broker must not stop the API booting: retry a few times (compose
+    DNS / EMQX listeners can lag), then carry on unconnected.
+    get_mqtt_publisher returns 503 until a later restart reconnects.
     """
     publisher = MqttPublisher()
-    try:
-        await publisher.connect()
-    except Exception:
-        logger.exception("MQTT connect failed at startup; actuator publishing disabled until reconnect")
+    last_error: BaseException | None = None
+    for attempt in range(1, MQTT_CONNECT_ATTEMPTS + 1):
+        try:
+            await publisher.connect()
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "MQTT connect attempt %s/%s to %s:%s failed: %s",
+                attempt,
+                MQTT_CONNECT_ATTEMPTS,
+                settings.MQTT_HOST,
+                settings.MQTT_PORT,
+                exc,
+            )
+            if attempt < MQTT_CONNECT_ATTEMPTS:
+                await asyncio.sleep(MQTT_CONNECT_INTERVAL_SECONDS)
+    if last_error is not None:
+        logger.warning("MQTT broker unavailable at startup; actuator publishing disabled")
     app.state.mqtt_publisher = publisher
     yield
     await publisher.disconnect()
