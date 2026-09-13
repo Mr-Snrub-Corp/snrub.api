@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from passlib.context import CryptContext
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.services.image_processing import process_photo
@@ -46,9 +47,18 @@ def get_user_by_uid(uid: UUID, session: Session):
 
 
 def get_users(session: Session):
-    """Get all users from the database"""
-    users = user_crud.get_all(session)
-    return [UserResponse.model_validate(user) for user in users]
+    """Get all users from the database.
+
+    Skip rows that cannot be serialized (e.g. a reserved-TLD email). One bad
+    seed must not 500 the whole list.
+    """
+    responses: list[UserResponse] = []
+    for user in user_crud.get_all(session):
+        try:
+            responses.append(UserResponse.model_validate(user))
+        except ValidationError:
+            logger.warning("skipping user %s: invalid for UserResponse", user.uid)
+    return responses
 
 
 def update_user(uid: UUID, user_data: UserUpdateRequest, session: Session, caller: dict):

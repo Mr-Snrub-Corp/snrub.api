@@ -3,6 +3,7 @@ from math import exp
 import pytest
 
 from app.services.plant_model import (
+    ACTUATOR_NOMINAL,
     K_CONTAINMENT_RADIATION,
     K_FLOW_TEMP,
     K_POWER_TEMP,
@@ -13,6 +14,7 @@ from app.services.plant_model import (
     TAUS,
     initial_state,
     step,
+    targets_from_actuators,
 )
 from app.services.telemetry import BASE_METRICS
 
@@ -179,3 +181,58 @@ class TestStep:
 
         assert state == state_copy
         assert targets == targets_copy
+
+
+class TestTargetsFromActuators:
+    """Phase 4: actuators/faults replace incidents as the plant driver."""
+
+    def test_empty_falls_back_to_nominal_which_is_base(self):
+        # Missing actuators default to nominal -> quiescent plant.
+        assert targets_from_actuators({}) == BASE_METRICS
+
+    def test_nominal_positions_are_base(self):
+        assert targets_from_actuators(dict(ACTUATOR_NOMINAL)) == BASE_METRICS
+
+    def test_returns_all_metrics(self):
+        assert set(targets_from_actuators({}).keys()) == set(METRICS)
+
+    def test_rod_fully_withdrawn_raises_reactivity(self):
+        # rod 0 (withdrawn) -> +5 reactivity
+        assert targets_from_actuators({"rod_position": 0.0})["reactivity"] == pytest.approx(5.0)
+
+    def test_rod_fully_inserted_lowers_reactivity(self):
+        assert targets_from_actuators({"rod_position": 100.0})["reactivity"] == pytest.approx(-5.0)
+
+    def test_pump_speed_sets_coolant_flow(self):
+        assert targets_from_actuators({"pump_speed": 20.0})["coolant_flow_rate"] == pytest.approx(20.0)
+
+    def test_steam_valve_closed_raises_pressure(self):
+        # valve 0 (closed) -> +70 bar over base 130
+        assert targets_from_actuators({"steam_valve": 0.0})["coolant_pressure"] == pytest.approx(200.0)
+
+    def test_steam_valve_open_lowers_pressure(self):
+        assert targets_from_actuators({"steam_valve": 100.0})["coolant_pressure"] == pytest.approx(60.0)
+
+    def test_leak_reduces_flow_and_raises_temperature(self):
+        # leak 100 mirrors primary_coolant_loss: flow -20, temp +150
+        t = targets_from_actuators({"leak_rate": 100.0})
+        assert t["coolant_flow_rate"] == pytest.approx(80.0 - 20.0)
+        assert t["core_temperature"] == pytest.approx(700.0 + 150.0)
+
+    def test_xenon_suppresses_reactivity(self):
+        # xenon 100 mirrors xenon_poisoning_instability: reactivity -3
+        assert targets_from_actuators({"xenon_injection": 100.0})["reactivity"] == pytest.approx(-3.0)
+
+    def test_leak_and_pump_combine_on_flow(self):
+        # pump 60, leak 50 -> 60 - 0.2*50 = 50
+        t = targets_from_actuators({"pump_speed": 60.0, "leak_rate": 50.0})
+        assert t["coolant_flow_rate"] == pytest.approx(50.0)
+
+    def test_actuator_change_moves_telemetry_after_a_step(self):
+        # "levers change telemetry": cutting the pump drives coolant flow down.
+        state = initial_state()
+        targets = targets_from_actuators({"pump_speed": 20.0})
+
+        result = step(state, targets, 1.0)
+
+        assert result["coolant_flow_rate"] < state["coolant_flow_rate"]

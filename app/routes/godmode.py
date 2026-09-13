@@ -1,29 +1,28 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlmodel import Session
 
-from ..controllers.godmode import get_levers, set_lever
-from ..db.database import get_session
-from ..models.godmode import GodModeLever, LeverSetRequest
+from app.controllers.actuators import get_actuators, set_actuator
+from app.models.actuators import Actuator, ActuatorSetRequest
+from app.services.mqtt import MqttPublisher, get_mqtt_publisher
+
 from ..security.authorization import verify_super_admin_access
 
 router = APIRouter(prefix="/godmode", tags=["God Mode"])
 
 
-@router.get("/levers")
-async def list_levers(
+@router.get("/actuators")
+async def list_actuators(
     user_data: dict = Depends(verify_super_admin_access),
-    session: Session = Depends(get_session),
 ):
-    return get_levers(session)
+    return get_actuators()
 
 
-@router.put("/levers/{lever}")
-async def set_one(
-    lever: GodModeLever,
-    data: LeverSetRequest,
+@router.put("/actuators/{actuator}")
+async def set_actuator_endpoint(
+    actuator: Actuator,
+    data: ActuatorSetRequest,
     user_data: dict = Depends(verify_super_admin_access),
-    session: Session = Depends(get_session),
+    publisher: MqttPublisher = Depends(get_mqtt_publisher),
 ):
-    return set_lever(lever, data, UUID(user_data["uid"]), session)
+    return await set_actuator(actuator, data, UUID(user_data["uid"]), publisher)
