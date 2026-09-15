@@ -78,6 +78,29 @@ class TestGetUser:
         assert "password" not in data
 
 
+class TestGetUsers:
+    def test_list_users_includes_caller(self, authenticated_user, auth_headers):
+        response = client.get("/api/users/", headers=auth_headers)
+        assert response.status_code == 200
+        uids = {row["uid"] for row in response.json()}
+        assert str(authenticated_user.uid) in uids
+
+    def test_list_users_skips_reserved_tld_email(self, session, authenticated_user, auth_headers):
+        """A .local email fails EmailStr; the list must still 200 without that row."""
+        from sqlalchemy import text
+
+        session.execute(
+            text("UPDATE users SET email = 'broken@snrub.local' WHERE uid = :uid"),
+            {"uid": str(authenticated_user.uid)},
+        )
+        session.commit()
+
+        response = client.get("/api/users/", headers=auth_headers)
+        assert response.status_code == 200
+        uids = {row["uid"] for row in response.json()}
+        assert str(authenticated_user.uid) not in uids
+
+
 class TestUpdateUser:
     """Tests for PUT /users/{uid} endpoint"""
 

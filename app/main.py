@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,7 @@ from .routes.incident_report_subject import router as incident_report_subject_ro
 from .routes.incident_type import router as incident_type_router
 from .routes.telemetry import router as telemetry_router
 from .routes.user import router as user_router
+from .services.mqtt import MqttPublisher
 
 # Configure logging
 logging.basicConfig(
@@ -25,8 +28,46 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+MQTT_CONNECT_ATTEMPTS = 5
+MQTT_CONNECT_INTERVAL_SECONDS = 2.0
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Own one MQTT publisher for the API's lifetime (super_admin actuator route).
+
+    A down broker must not stop the API booting: retry a few times (compose
+    DNS / EMQX listeners can lag), then carry on unconnected.
+    get_mqtt_publisher returns 503 until a later restart reconnects.
+    """
+    publisher = MqttPublisher()
+    last_error: BaseException | None = None
+    for attempt in range(1, MQTT_CONNECT_ATTEMPTS + 1):
+        try:
+            await publisher.connect()
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "MQTT connect attempt %s/%s to %s:%s failed: %s",
+                attempt,
+                MQTT_CONNECT_ATTEMPTS,
+                settings.MQTT_HOST,
+                settings.MQTT_PORT,
+                exc,
+            )
+            if attempt < MQTT_CONNECT_ATTEMPTS:
+                await asyncio.sleep(MQTT_CONNECT_INTERVAL_SECONDS)
+    if last_error is not None:
+        logger.warning("MQTT broker unavailable at startup; actuator publishing disabled")
+    app.state.mqtt_publisher = publisher
+    yield
+    await publisher.disconnect()
+
+
 # Disable default Swagger UI docs, we'll use Scalar instead
-app = FastAPI(docs_url=None, redoc_url=None)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # Add session middleware - required for OAuth flows - reusing the JWT secret balances security and simplicity
 app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET)

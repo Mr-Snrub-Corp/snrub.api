@@ -21,8 +21,10 @@ from math import exp
 from app.services.telemetry import (
     BASE_CONTAINMENT_INTEGRITY,
     BASE_COOLANT_FLOW_RATE,
+    BASE_COOLANT_PRESSURE,
     BASE_CORE_TEMPERATURE,
     BASE_METRICS,
+    BASE_REACTIVITY,
     BASE_REACTOR_POWER_OUTPUT,
 )
 
@@ -68,6 +70,28 @@ K_REACTIVITY_POWER = 3.0  # % power per reactivity unit
 K_CONTAINMENT_RADIATION = 5.0  # mSv/h per % containment deficit
 K_TEMP_REACTIVITY = 0.005  # reactivity per °C above base (Doppler-style negative feedback)
 
+# --- Actuators (Phase 4, docs/roadmap.md) -------------------------------------
+# God-mode levers set these; targets_from_actuators folds them into the same
+# target shape compute_targets produced, so step() integrates identically.
+# Commands (rod/pump/steam) set the operating point; faults (leak/xenon) push
+# away from it. Magnitudes mirror the incident deltas they replace in
+# telemetry.INCIDENT_IMPACT_MAP (primary_coolant_loss, xenon_poisoning).
+ACTUATOR_NOMINAL: dict[str, float] = {
+    "rod_position": 50.0,  # % inserted; 50 = critical (reactivity 0)
+    "pump_speed": 80.0,  # % ; drives coolant flow, nominal = base flow
+    "steam_valve": 50.0,  # % open; 50 = base pressure
+    "leak_rate": 0.0,  # fault; 0 = no leak
+    "xenon_injection": 0.0,  # fault; 0 = no poisoning
+}
+
+ACTUATOR_RANGES: dict[str, tuple[float, float]] = dict.fromkeys(ACTUATOR_NOMINAL, (0.0, 100.0))
+
+K_ROD_REACTIVITY = 0.1  # reactivity per % rod displaced from nominal -> ±5 at the rails
+K_VALVE_PRESSURE = 1.4  # bar per % steam-valve displaced from nominal -> ±70
+K_LEAK_FLOW = 0.2  # coolant-flow %-pts lost per leak unit -> -20 at leak 100
+K_LEAK_TEMP = 1.5  # °C per leak unit -> +150 at leak 100
+K_XENON_REACTIVITY = 0.03  # reactivity suppressed per xenon unit -> -3 at xenon 100
+
 
 def initial_state() -> dict[str, float]:
     """Quiescent plant: every metric at its base value."""
@@ -90,12 +114,54 @@ def _effective_targets(state: dict[str, float], targets: dict[str, float]) -> di
     return eff
 
 
-def step(state: dict[str, float], targets: dict[str, float], dt: float) -> dict[str, float]:
-    """Advance true state by dt seconds toward the targets. Inputs not mutated."""
+def step(state: dict[str, float], targets: dict[str, float], elapsed_seconds: float) -> dict[str, float]:
+    """Advance true plant state toward ``targets`` by ``elapsed_seconds``.
+
+    Inputs are not mutated. Each metric eases a fraction of the remaining gap
+    (larger ``elapsed_seconds`` → closer to the target). The simulator passes
+    1.0 (one tick).
+
+    Returns the new true state, same keys as METRICS, e.g. after one second
+    at the base targets::
+
+        {"reactor_power": 95.0, "core_temperature": 700.0, "reactivity": 0.0,
+         "coolant_flow_rate": 80.0, "coolant_pressure": 130.0,
+         "radiation_level": 2.0, "containment_integrity": 95.0}
+    """
     eff = _effective_targets(state, targets)
     result: dict[str, float] = {}
     for metric in METRICS:
-        alpha = 1.0 - exp(-dt / TAUS[metric])
+        alpha = 1.0 - exp(-elapsed_seconds / TAUS[metric])
         value = state[metric] + (eff[metric] - state[metric]) * alpha
         result[metric] = _clamp(value, *PHYSICAL_RANGES[metric])
     return result
+
+
+def targets_from_actuators(actuators: dict[str, float]) -> dict[str, float]:
+    """Fold actuator/fault positions into plant targets (Phase 4, docs/roadmap.md).
+
+    Replaces compute_targets(incidents) as the plant driver: commands set the
+    operating point, faults push away from it. Missing actuators fall back to
+    their nominal position, so an empty dict yields exactly BASE_METRICS. Only
+    sets targets — coupling and clamping still happen in step().
+    """
+
+    def _value(name: str) -> float:
+        return actuators.get(name, ACTUATOR_NOMINAL[name])
+
+    rod = _value("rod_position")
+    pump = _value("pump_speed")
+    valve = _value("steam_valve")
+    leak = _value("leak_rate")
+    xenon = _value("xenon_injection")
+
+    targets = dict(BASE_METRICS)
+    # Commands — normal operating point.
+    targets["reactivity"] = BASE_REACTIVITY + K_ROD_REACTIVITY * (ACTUATOR_NOMINAL["rod_position"] - rod)
+    targets["coolant_flow_rate"] = pump
+    targets["coolant_pressure"] = BASE_COOLANT_PRESSURE + K_VALVE_PRESSURE * (ACTUATOR_NOMINAL["steam_valve"] - valve)
+    # Faults — malfunctions layered on top of the commanded point.
+    targets["coolant_flow_rate"] -= K_LEAK_FLOW * leak
+    targets["core_temperature"] = BASE_CORE_TEMPERATURE + K_LEAK_TEMP * leak
+    targets["reactivity"] -= K_XENON_REACTIVITY * xenon
+    return targets

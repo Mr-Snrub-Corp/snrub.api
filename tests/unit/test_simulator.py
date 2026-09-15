@@ -1,4 +1,5 @@
 import asyncio
+import json
 import random
 from unittest.mock import patch
 
@@ -12,15 +13,25 @@ from app.services.telemetry import BASE_METRICS
 from app.simulator import (
     METRIC_TOPIC_PATHS,
     TICK_SECONDS,
+    _actuators_topic,
     _advance_plant,
     _alarm_topic,
+    _apply_actuator_message,
     _connect_with_retry,
+    _consume_actuators,
     _metric_topic,
     _metrics_topic,
     _publish_tick,
     _sleep_or_stop,
     run_simulator,
 )
+
+
+class FakeMessage:
+    """Stand-in for aiomqtt.Message; only payload is read by the consumer."""
+
+    def __init__(self, payload):
+        self.payload = payload
 
 
 class FakePublisher:
@@ -30,6 +41,7 @@ class FakePublisher:
         self.connect_calls = 0
         self.disconnect_calls = 0
         self.published: list[dict] = []
+        self.subscribed: list[str] = []
         self.connect_error: BaseException | None = None
         self.publish_error: BaseException | None = None
         self._connect_errors: list[BaseException] = []
@@ -48,6 +60,19 @@ class FakePublisher:
         if self.publish_error is not None:
             raise self.publish_error
         self.published.append({"topic": topic, "payload": payload, "retain": retain, "qos": qos})
+
+    async def subscribe(self, topic, *, qos=0):
+        self.subscribed.append(topic)
+
+    @property
+    def messages(self):
+        return self._messages()
+
+    async def _messages(self):
+        # No actuator messages in these unit tests; block until cancelled so the
+        # consumer task behaves like the real never-ending iterator.
+        await asyncio.Event().wait()
+        yield  # pragma: no cover - unreachable, keeps this an async generator
 
 
 class DummySession:
@@ -152,20 +177,28 @@ class TestConnectWithRetry:
 
 
 class TestAdvancePlant:
-    def test_integrates_samples_and_persists(self):
+    def test_nominal_actuators_keep_plant_quiescent(self):
         persisted = {}
 
         def fake_persist(session, state, readings, tick):
             persisted.update(state=state, readings=readings, tick=tick)
 
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
         with (
             patch("app.simulator.Session", DummySession),
-            patch("app.simulator.get_reports_for_telemetry", return_value=[]),
             patch("app.simulator._persist", fake_persist),
+            patch("app.simulator.incident_emitter.emit"),
         ):
-            state, readings = _advance_plant(plant_model.initial_state(), dict(BASE_METRICS), 7, random.Random(3))
+            state, readings = _advance_plant(
+                plant_model.initial_state(),
+                dict(BASE_METRICS),
+                7,
+                random.Random(3),
+                actuator_state,
+                {},
+            )
 
-        # No active incidents: targets are the bases, so state stays quiescent.
+        # Nominal actuators map to the base targets, so state stays quiescent.
         expected_state = plant_model.step(plant_model.initial_state(), dict(BASE_METRICS), TICK_SECONDS)
         expected_readings = sensors.sample_all(expected_state, dict(BASE_METRICS), TICK_SECONDS, rng=random.Random(3))
         assert state == expected_state
@@ -173,6 +206,80 @@ class TestAdvancePlant:
         assert persisted["state"] == state
         assert persisted["readings"] == readings
         assert persisted["tick"] == 7
+
+    def test_actuators_drive_targets_not_incidents(self):
+        """Phase 4: a lowered pump commands less coolant flow; incidents no longer feed targets."""
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        actuator_state["pump_speed"] = 20.0
+
+        with (
+            patch("app.simulator.Session", DummySession),
+            patch("app.simulator._persist", lambda *a, **k: None),
+            patch("app.simulator.incident_emitter.emit"),
+        ):
+            state, _ = _advance_plant(
+                plant_model.initial_state(),
+                dict(BASE_METRICS),
+                1,
+                random.Random(3),
+                actuator_state,
+                {},
+            )
+
+        expected_targets = plant_model.targets_from_actuators(actuator_state)
+        expected_state = plant_model.step(plant_model.initial_state(), expected_targets, TICK_SECONDS)
+        assert state == expected_state
+        # pump_speed 20 (< nominal 80) commands the coolant-flow target down.
+        assert state["coolant_flow_rate"] < BASE_METRICS["coolant_flow_rate"]
+
+
+class TestActuatorConsumption:
+    def test_actuators_topic_is_the_retained_wildcard(self):
+        assert _actuators_topic() == f"{settings.MQTT_BASE_TOPIC}/plant/actuators/#"
+
+    def test_apply_message_updates_named_actuator(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "pump_speed", "value": 20.0}))
+        assert actuator_state["pump_speed"] == 20.0
+
+    def test_apply_message_accepts_bytes_payload(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "leak_rate", "value": 55}).encode())
+        assert actuator_state["leak_rate"] == 55.0
+
+    def test_apply_message_clamps_out_of_range_value(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "leak_rate", "value": 999}))
+        assert actuator_state["leak_rate"] == 100.0
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "pump_speed", "value": -5}))
+        assert actuator_state["pump_speed"] == 0.0
+
+    def test_apply_message_ignores_unknown_actuator(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, json.dumps({"actuator": "not_real", "value": 10}))
+        assert "not_real" not in actuator_state
+        assert actuator_state == plant_model.ACTUATOR_NOMINAL
+
+    @pytest.mark.parametrize("bad", ["not json", json.dumps({"actuator": "pump_speed"}), json.dumps({"value": 5})])
+    def test_apply_message_ignores_malformed(self, bad):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        _apply_actuator_message(actuator_state, bad)
+        assert actuator_state == plant_model.ACTUATOR_NOMINAL
+
+    def test_consumer_folds_messages_into_state(self):
+        actuator_state = dict(plant_model.ACTUATOR_NOMINAL)
+        stop = asyncio.Event()
+
+        class OnePublisher:
+            @property
+            def messages(self):
+                return self._gen()
+
+            async def _gen(self):
+                yield FakeMessage(json.dumps({"actuator": "xenon_injection", "value": 80.0}))
+
+        _run(_consume_actuators(OnePublisher(), actuator_state, stop))
+        assert actuator_state["xenon_injection"] == 80.0
 
 
 class TestPublishTick:
@@ -238,7 +345,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=one_tick),
             patch("app.simulator.TICK_SECONDS", 0),
         ):
@@ -264,7 +374,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=fail_then_ok),
             patch("app.simulator.TICK_SECONDS", 0),
             patch("app.simulator.RECONNECT_SECONDS", 0),
@@ -291,7 +404,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=boom_then_ok),
             patch("app.simulator.TICK_SECONDS", 0),
         ):
@@ -312,7 +428,10 @@ class TestRunSimulator:
             patch("app.simulator.MqttPublisher", return_value=fake),
             patch("app.simulator._wait_for_db", _db_ready),
             patch("app.simulator._load_or_init_state", return_value=(dict(BASE_METRICS), dict(BASE_METRICS), 0)),
-            patch("app.simulator._advance_plant", lambda state, prev, tick, rng: (state, prev)),
+            patch(
+                "app.simulator._advance_plant",
+                lambda state, prev, tick, rng, actuators, streaks: (state, prev),
+            ),
             patch("app.simulator._publish_tick", side_effect=fail_and_stop),
             patch("app.simulator.RECONNECT_SECONDS", 0),
         ):

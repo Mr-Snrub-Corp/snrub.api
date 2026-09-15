@@ -9,6 +9,8 @@ services:
     env_file: .env.development
     environment:
       APP_ENV: development
+      MQTT_HOST: emqx
+      MQTT_ROLE: api
     volumes:
       - ./app:/fastapi/app
       - ./tests:/fastapi/tests
@@ -22,8 +24,10 @@ services:
       - "8000:8000"
     restart: "no"
     depends_on:
-      - db
-      - emqx
+      db:
+        condition: service_started
+      emqx:
+        condition: service_healthy
 
   simulator:
     image: mot-fastapi:dev
@@ -39,13 +43,16 @@ services:
     environment:
       APP_ENV: development
       MQTT_HOST: emqx
+      MQTT_ROLE: simulator
     volumes:
       - ./app:/fastapi/app
       - ./.env.development:/fastapi/.env.development
     restart: "no"
     depends_on:
-      - db
-      - emqx
+      db:
+        condition: service_started
+      emqx:
+        condition: service_healthy
     deploy:
       replicas: 1 # the tick loop must be a singleton (docs/roadmap.md Phase 3)
 
@@ -90,14 +97,37 @@ services:
   emqx:
     image: emqx/emqx:5.8
     container_name: emqx-broker
+    env_file: .env.development
+    # Custom entrypoint writes the auth bootstrap CSV, then must exec the
+    # image CMD. Overriding entrypoint clears CMD unless we set it here.
+    entrypoint: ["/opt/emqx-bootstrap/entrypoint.sh"]
+    command: ["/opt/emqx/bin/emqx", "foreground"]
     environment:
-      EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+      # Built-in-DB auth on the default (TCP) chain. Bootstrap file is written
+      # at start from MQTT_API_* / MQTT_SIM_* (no passwords in git). No persisted
+      # emqx volume → every recreate re-seeds. WS stays anonymous for mqtt.js.
+      EMQX_AUTHENTICATION__1__MECHANISM: password_based
+      EMQX_AUTHENTICATION__1__BACKEND: built_in_database
+      EMQX_AUTHENTICATION__1__USER_ID_TYPE: username
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__NAME: sha256
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__SALT_POSITION: suffix
+      EMQX_AUTHENTICATION__1__BOOTSTRAP_FILE: /tmp/auth-bootstrap.csv
+      EMQX_AUTHENTICATION__1__BOOTSTRAP_TYPE: plain
+      EMQX_LISTENERS__WS__DEFAULT__ENABLE_AUTHN: "false"
     volumes:
       - ./emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      - ./emqx/entrypoint.sh:/opt/emqx-bootstrap/entrypoint.sh:ro
     ports:
-      - "1883:1883" # MQTT
-      - "8083:8083" # MQTT over WebSocket (mqtt.js)
+      - "1883:1883" # MQTT (api + simulator; auth required)
+      - "8083:8083" # MQTT over WebSocket (mqtt.js; anonymous)
       - "18083:18083" # Dashboard
+    healthcheck:
+      # DEBUG=true from the API env_file breaks `emqx ctl` (it wants an integer).
+      test: ["CMD-SHELL", "DEBUG=0 /opt/emqx/bin/emqx ctl status"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     restart: "no"
 
   mailhog:

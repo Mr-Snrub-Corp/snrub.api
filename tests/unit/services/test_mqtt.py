@@ -20,6 +20,8 @@ class FakeMqttClient:
         self.entered = False
         self.exited = False
         self.published: list[dict] = []
+        self.subscribed: list[dict] = []
+        self.messages = object()  # sentinel: MqttPublisher.messages should return this
 
     async def __aenter__(self):
         self.entered = True
@@ -31,6 +33,9 @@ class FakeMqttClient:
 
     async def publish(self, topic, payload, qos=0, retain=False):
         self.published.append({"topic": topic, "payload": payload, "qos": qos, "retain": retain})
+
+    async def subscribe(self, topic, qos=0):
+        self.subscribed.append({"topic": topic, "qos": qos})
 
 
 def _run(coro):
@@ -199,6 +204,51 @@ class TestMqttPublisherPublish:
         published = created[0].published[0]
         assert published["retain"] is True
         assert published["qos"] == 1
+
+    def test_subscribe_before_connect_raises(self):
+        publisher = MqttPublisher()
+
+        with pytest.raises(RuntimeError, match="before connect"):
+            _run(publisher.subscribe("snrub/plant/actuators/#"))
+
+    def test_subscribe_delegates_to_client(self):
+        created: list[FakeMqttClient] = []
+
+        def factory(**kwargs):
+            client = FakeMqttClient(**kwargs)
+            created.append(client)
+            return client
+
+        publisher = MqttPublisher(host="emqx", port=1883)
+
+        async def scenario():
+            with patch("app.services.mqtt.aiomqtt.Client", side_effect=factory):
+                await publisher.connect()
+                await publisher.subscribe("snrub/plant/actuators/#", qos=1)
+
+        _run(scenario())
+
+        assert created[0].subscribed == [{"topic": "snrub/plant/actuators/#", "qos": 1}]
+
+    def test_messages_before_connect_raises(self):
+        publisher = MqttPublisher()
+
+        with pytest.raises(RuntimeError, match="before connect"):
+            _ = publisher.messages
+
+    def test_messages_delegates_to_client(self):
+        created: list[FakeMqttClient] = []
+
+        def factory(**kwargs):
+            client = FakeMqttClient(**kwargs)
+            created.append(client)
+            return client
+
+        publisher = MqttPublisher(host="emqx", port=1883)
+
+        with patch("app.services.mqtt.aiomqtt.Client", side_effect=factory):
+            _run(publisher.connect())
+            assert publisher.messages is created[0].messages
 
     def test_publish_encodes_non_json_values_with_default_str(self):
         """Payload values that aren't natively JSON-serializable (e.g. datetime) are converted via str()
