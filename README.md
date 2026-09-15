@@ -6,24 +6,24 @@
 |--------------------------------------------- | -------: | -------: | -------: | -------: | --------: | --------: |
 | app/\_\_init\_\_.py                          |        0 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/\_\_init\_\_.py              |        0 |        0 |        0 |        0 |    100.0% |           |
+| app/controllers/actuators.py                 |       14 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/auth/\_\_init\_\_.py         |        0 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/auth/local.py                |       15 |        2 |        4 |        1 |     84.2% |    17, 34 |
 | app/controllers/auth/password\_reset.py      |       56 |        3 |        8 |        0 |     95.3% |     89-91 |
-| app/controllers/godmode.py                   |       44 |        1 |       12 |        1 |     96.4% |        44 |
 | app/controllers/incident\_category.py        |       11 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/incident\_report.py          |       76 |        1 |       26 |        1 |     98.0% |       126 |
 | app/controllers/incident\_report\_subject.py |       26 |        0 |        4 |        0 |    100.0% |           |
 | app/controllers/incident\_type.py            |       20 |        0 |        0 |        0 |    100.0% |           |
 | app/controllers/telemetry.py                 |       14 |        0 |        4 |        1 |     94.4% |   18-\>21 |
-| app/controllers/user.py                      |       71 |       12 |       20 |        8 |     78.0% |44, 50-51, 60, 65, 71-\>77, 74, 79-84, 106, 122 |
+| app/controllers/user.py                      |       77 |       10 |       22 |        8 |     81.8% |45, 70, 75, 81-\>87, 84, 89-94, 116, 132 |
 | app/core/\_\_init\_\_.py                     |        0 |        0 |        0 |        0 |    100.0% |           |
-| app/core/config.py                           |       28 |        0 |        0 |        0 |    100.0% |           |
+| app/core/config.py                           |       45 |        0 |        4 |        0 |    100.0% |           |
 | app/db/crud\_base.py                         |      107 |        0 |       10 |        0 |    100.0% |           |
 | app/db/database.py                           |        8 |        3 |        0 |        0 |     62.5% | 14, 19-20 |
-| app/main.py                                  |       38 |        2 |        0 |        0 |     94.7% |    49, 68 |
+| app/main.py                                  |       62 |        2 |        6 |        0 |     97.1% |   90, 109 |
 | app/models/\_\_init\_\_.py                   |        0 |        0 |        0 |        0 |    100.0% |           |
+| app/models/actuators.py                      |       14 |        0 |        0 |        0 |    100.0% |           |
 | app/models/auth.py                           |       10 |        0 |        0 |        0 |    100.0% |           |
-| app/models/godmode.py                        |       13 |        0 |        0 |        0 |    100.0% |           |
 | app/models/incident\_category.py             |       12 |        0 |        0 |        0 |    100.0% |           |
 | app/models/incident\_report.py               |       48 |        0 |        0 |        0 |    100.0% |           |
 | app/models/incident\_report\_subject.py      |       17 |        0 |        0 |        0 |    100.0% |           |
@@ -37,13 +37,13 @@
 | app/routes/auth/\_\_init\_\_.py              |        0 |        0 |        0 |        0 |    100.0% |           |
 | app/routes/auth/google.py                    |       45 |        5 |        4 |        0 |     89.8% |25-26, 35-37 |
 | app/routes/auth/local.py                     |       20 |        1 |        0 |        0 |     95.0% |        24 |
-| app/routes/godmode.py                        |       14 |        0 |        0 |        0 |    100.0% |           |
+| app/routes/godmode.py                        |       13 |        0 |        0 |        0 |    100.0% |           |
 | app/routes/incident\_category.py             |       13 |        0 |        0 |        0 |    100.0% |           |
 | app/routes/incident\_report.py               |       25 |        0 |        0 |        0 |    100.0% |           |
 | app/routes/incident\_report\_subject.py      |       18 |        0 |        0 |        0 |    100.0% |           |
 | app/routes/incident\_type.py                 |       23 |        0 |        2 |        0 |    100.0% |           |
 | app/routes/telemetry.py                      |       22 |       11 |        2 |        0 |     45.8% |     21-32 |
-| app/routes/user.py                           |       39 |        3 |        6 |        2 |     88.9% |44, 94, 97 |
+| app/routes/user.py                           |       39 |        2 |        6 |        2 |     91.1% |    94, 97 |
 | app/security/\_\_init\_\_.py                 |        0 |        0 |        0 |        0 |    100.0% |           |
 | app/security/auth\_bearer.py                 |       25 |        5 |        8 |        4 |     72.7% |19, 21, 24, 32-33, 34-\>37 |
 | app/security/authorization.py                |       48 |       15 |       14 |        2 |     62.9% |32, 46, 75-90 |
@@ -52,13 +52,14 @@
 | app/services/alarms.py                       |       21 |        0 |        8 |        0 |    100.0% |           |
 | app/services/email.py                        |       13 |        0 |        0 |        0 |    100.0% |           |
 | app/services/image\_processing.py            |       11 |        0 |        0 |        0 |    100.0% |           |
-| app/services/mqtt.py                         |       26 |        0 |        4 |        0 |    100.0% |           |
-| app/services/plant\_model.py                 |       29 |        0 |        2 |        0 |    100.0% |           |
+| app/services/incident\_emitter.py            |       82 |        5 |       30 |        3 |     92.9% |120, 138-139, 163-164 |
+| app/services/mqtt.py                         |       45 |        5 |       10 |        0 |     87.3% | 40, 92-95 |
+| app/services/plant\_model.py                 |       52 |        0 |        2 |        0 |    100.0% |           |
 | app/services/sensors.py                      |       25 |        0 |        4 |        0 |    100.0% |           |
 | app/services/setpoints.py                    |        8 |        0 |        0 |        0 |    100.0% |           |
 | app/services/telemetry.py                    |       29 |        0 |        6 |        0 |    100.0% |           |
-| app/simulator.py                             |      136 |       39 |       30 |        3 |     68.7% |89-95, 101-114, 118-132, 184, 206-\>189, 213-219, 223-227 |
-| **TOTAL**                                    | **1371** |  **112** |  **196** |   **24** | **90.2%** |           |
+| app/simulator.py                             |      172 |       47 |       38 |        4 |     70.0% |104, 144-150, 156-169, 177-191, 253, 271-276, 282-\>261, 286, 290-296, 300-304 |
+| **TOTAL**                                    | **1548** |  **126** |  **240** |   **27** | **90.2%** |           |
 
 
 ## Setup coverage badge
