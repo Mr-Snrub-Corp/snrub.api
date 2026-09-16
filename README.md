@@ -27,6 +27,19 @@ mot.fastapi/
 └── ruff.toml
 ```
 
+## Documentation
+
+After Phase 4, the plant is several concurrent loops (God-mode REST → MQTT, a 1Hz simulator, dashboard WebSocket, alarm bus); [docs/phase4-sequences.md](docs/phase4-sequences.md) walks through each part as its own sequence diagram:
+
+- [Context](docs/phase4-sequences.md#context) — processes, Postgres, and MQTT at a glance
+- [1. Set an actuator](docs/phase4-sequences.md#1-set-an-actuator) — super_admin lever to retained actuator topic
+- [2. Simulator consumes setpoints](docs/phase4-sequences.md#2-simulator-consumes-setpoints) — subscribe and fold messages into `actuator_state`
+- [3. One tick](docs/phase4-sequences.md#3-one-tick) — integrate true state, sample sensors, persist, emit incidents
+- [4. Telemetry and alarms leave the process](docs/phase4-sequences.md#4-telemetry-and-alarms-leave-the-process) — metrics blob, per-metric topics, retained alarms
+- [5. Dashboard WebSocket](docs/phase4-sequences.md#5-dashboard-websocket) — `/ws/telemetry` reads latest measured snapshot
+- [6. Auto-incident](docs/phase4-sequences.md#6-auto-incident) — debounced DANGER excursions → `[auto]` incident reports
+
+Broader phase plan: [docs/roadmap.md](docs/roadmap.md).
 
 ## Local development 
 

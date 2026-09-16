@@ -259,6 +259,8 @@ events* on state excursion. super_admin authority enforced by EMQX ACL on
 `snrub/plant/actuators/#`. Levers publish through an authenticated API
 endpoint (keeps JWT in charge; browser doesn't hold broker creds for control).
 
+As-built sequences (one loop per diagram): `docs/phase4-sequences.md`.
+
 **Services.** Extend `plant_model.py` to subscribe to actuator commands and
 fold them into targets. New `app/services/incident_emitter.py` (state excursion
 → POST `IncidentReport`, debounced, the #2 auto-reporter). New super_admin
@@ -280,7 +282,7 @@ route that validates and republishes lever changes to
 > ACL config, and integration tests (levers change telemetry; excursions emit
 > exactly one incident).
 
-**Sequence.**
+**Sequence.** Planning sketch; as-built split is `docs/phase4-sequences.md`.
 
 ```mermaid
 sequenceDiagram

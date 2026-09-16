@@ -2,6 +2,8 @@
 
 MQTT is a pub/sub protocol built for sensor streams. It fits this plant thematically. It is only worth adding if more than one consumer cares about the same topics.
 
+Phase 4 as-built sequences (broker + simulator + alarms): `docs/phase4-sequences.md`. The "current path" below is the pre-broker shape.
+
 ## Current path (no broker)
 
 ```
